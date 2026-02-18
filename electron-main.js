@@ -28,7 +28,7 @@ function createWindow() {
 
   // Esperar un momento para que el servidor arranque
   setTimeout(() => {
-    win.loadURL('http://localhost:3000');
+    win.loadURL('https://diskold.onrender.com');
     win.show();
   }, 1200);
 

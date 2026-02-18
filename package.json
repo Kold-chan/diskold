@@ -1,15 +1,28 @@
 {
   "name": "diskold",
   "version": "1.0.0",
-  "description": "Diskold — App de chat y voz en tiempo real. Creada por Kold.",
-  "main": "server.js",
+  "main": "electron-main.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "npx nodemon server.js"
+    "dev": "npx nodemon server.js",
+    "electron": "electron .",
+    "build:exe": "electron-builder --win"
+  },
+  "build": {
+    "appId": "com.kold.diskold",
+    "productName": "Diskold",
+    "win": {
+      "target": "nsis",
+      "icon": "public/icon-512.png"
+    }
   },
   "dependencies": {
     "express": "^4.18.2",
     "socket.io": "^4.6.1"
+  },
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.0.0"
   },
   "author": "Kold",
   "license": "MIT"
