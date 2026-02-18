@@ -1,0 +1,68 @@
+name: Build Diskold APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:  # También permite correrlo manualmente
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Descarga el código
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      # 2. Instala Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      # 3. Instala dependencias del proyecto
+      - name: Install dependencies
+        run: npm install
+
+      # 4. Instala Capacitor (convierte web → Android)
+      - name: Install Capacitor
+        run: |
+          npm install @capacitor/core @capacitor/cli @capacitor/android
+
+      # 5. Inicializa Capacitor
+      - name: Init Capacitor
+        run: |
+          npx cap init Diskold com.kold.diskold --web-dir public
+
+      # 6. Agrega plataforma Android
+      - name: Add Android platform
+        run: npx cap add android
+
+      # 7. Copia los archivos web al proyecto Android
+      - name: Sync web assets
+        run: npx cap sync android
+
+      # 8. Configura Java 17 (necesario para Gradle)
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      # 9. Da permisos al script de Gradle
+      - name: Grant Gradle permissions
+        run: chmod +x android/gradlew
+
+      # 10. Compila el APK (debug, no necesita firma)
+      - name: Build APK
+        run: |
+          cd android
+          ./gradlew assembleDebug --no-daemon
+
+      # 11. Sube el APK como artefacto descargable
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Diskold-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
