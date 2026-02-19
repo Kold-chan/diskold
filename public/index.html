@@ -168,7 +168,7 @@
     .watch-close-btn:hover{background:rgba(255,68,102,.3);}
 
     .yt-embed-wrap{flex:1;position:relative;background:#000;}
-    #watch-iframe{width:100%;height:100%;border:none;display:block;}
+    .yt-embed-wrap iframe, .yt-embed-wrap > div { position:absolute;inset:0;width:100%!important;height:100%!important; }
 
     .watch-controls{height:56px;background:rgba(0,0,0,.9);display:flex;align-items:center;padding:0 16px;gap:10px;flex-shrink:0;border-top:1px solid rgba(255,255,255,.08);}
     .w-btn{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:7px 14px;color:var(--text);cursor:pointer;font-size:.85rem;transition:all .2s;}
@@ -279,7 +279,7 @@
       .watch-close-btn{font-size:.72rem;padding:5px 10px;}
       .viewers-badge{font-size:.65rem;}
       .yt-embed-wrap{flex:1;position:relative;}
-      #watch-iframe{position:absolute;inset:0;width:100%;height:100%;}
+      /* video area height mobile */
 
       /* Controles debajo del video */
       .watch-controls{
@@ -530,11 +530,8 @@
             <div class="viewers-badge" id="viewers-badge">0 viendo</div>
             <button class="watch-close-btn" onclick="leaveWatchParty()">✕ Salir</button>
           </div>
-          <div class="yt-embed-wrap">
-            <iframe id="watch-iframe"
-              allow="autoplay; encrypted-media"
-              allowfullscreen>
-            </iframe>
+          <div class="yt-embed-wrap" id="yt-embed-wrap">
+            <!-- YT.Player se inyecta aquí via JS -->
           </div>
           <div class="watch-controls">
             <button class="w-btn" id="wp-play-btn" onclick="wpTogglePlay()">▶ Play</button>
@@ -643,13 +640,21 @@ const socket=io();
 // Watch Party state
 let wpActive=false, wpVideoId=null, wpPlaying=false, wpIframe=null;
 
-// ── YouTube Music API ─────────────────────────────────────
+// ── YouTube API (música + watch party comparten la misma API) ─
 let ytPlayer=null, ytReady=false;
 window.onYouTubeIframeAPIReady=()=>{
   ytReady=true;
+  // Player de música (oculto)
   ytPlayer=new YT.Player('yt-player',{height:'1',width:'1',playerVars:{autoplay:0,controls:0},
-    events:{onStateChange:e=>{ if(e.data===YT.PlayerState.ENDED)socket.emit('bot-command',{command:'/skip'}); if(e.data===YT.PlayerState.PLAYING)startProgress(); },
-            onReady:()=>ytPlayer.setVolume(80)}});
+    events:{
+      onStateChange:e=>{ if(e.data===YT.PlayerState.ENDED)socket.emit('bot-command',{command:'/skip'}); if(e.data===YT.PlayerState.PLAYING)startProgress(); },
+      onReady:()=>ytPlayer.setVolume(80)
+    }
+  });
+  // FIX: Si había un watch party pendiente de cargarse, iniciarlo ahora
+  if(wpCurrentVid && !wpPlayer){
+    createWpPlayer(wpCurrentVid, wpPendingTime, wpPendingPlay);
+  }
 };
 let progressInterval=null;
 function startProgress(){ clearInterval(progressInterval); progressInterval=setInterval(()=>{ if(!ytPlayer||!ytPlayer.getDuration)return; const d=ytPlayer.getDuration(),c=ytPlayer.getCurrentTime(); if(d>0)document.getElementById('progress-fill').style.width=(c/d*100)+'%'; },1000); }
@@ -849,73 +854,176 @@ function startWatchParty(){
   document.getElementById('watch-url-input').value='';
 }
 
-socket.on('watch-state',state=>{
-  if(!state.active){
-    if(wpActive) leaveWatchPartyLocal();
+// ── WATCH PARTY PLAYER ───────────────────────────────────
+// Usamos un iframe con la YouTube IFrame API correctamente
+// FIX 1: player real de YT API en vez de iframe postMessage (no funciona en móvil)
+// FIX 2: inicio sincronizado — todos esperan a que el video cargue
+// FIX 3: sync funcional usando seekTo real
+// FIX 4: viewers count actualizado en tiempo real
+
+let wpPlayer       = null;
+let wpPlayerReady  = false;
+let wpPendingPlay  = false;
+let wpPendingTime  = 0;
+let wpCurrentVid   = null;
+let wpIgnoreEvents = false; // evita bucles de eventos
+
+function createWpPlayer(videoId, startTime, shouldPlay){
+  wpCurrentVid  = videoId;
+  wpPlayerReady = false;
+  wpPendingPlay = shouldPlay;
+  wpPendingTime = startTime || 0;
+  wpIgnoreEvents = true;
+
+  if(wpPlayer){ try{ wpPlayer.destroy(); }catch(e){} wpPlayer=null; }
+
+  // Recrea el contenedor limpio
+  const wrap = document.getElementById('yt-embed-wrap');
+  wrap.innerHTML = '';
+  const div = document.createElement('div');
+  div.id = 'wp-yt-div';
+  div.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;';
+  wrap.appendChild(div);
+
+  if(!ytReady){
+    // YT API aún no cargó — guardar pendiente y esperar
     return;
   }
-  wpActive=true; wpVideoId=state.videoId; wpPlaying=state.playing;
 
-  const btn=document.getElementById('watch-party-btn');
-  btn.classList.add('live');
-  btn.innerHTML=`<div class="watch-dot"></div> LIVE`;
+  wpPlayer = new YT.Player('wp-yt-div', {
+    width:'100%', height:'100%',
+    videoId: videoId,
+    playerVars:{
+      autoplay:    0,
+      controls:    1,
+      rel:         0,
+      modestbranding: 1,
+      playsinline: 1,   // CRÍTICO iOS — reproduce en la página, no pantalla completa forzada
+      origin:      location.origin,
+    },
+    events:{
+      onReady(e){
+        wpPlayerReady = true;
+        wpIgnoreEvents = false;
+        if(wpPendingTime > 1) e.target.seekTo(wpPendingTime, true);
+        // FIX 2: solo reproducir si hay play pendiente (inicio sincronizado)
+        if(wpPendingPlay) e.target.playVideo();
+        wpPendingPlay = false;
+      },
+      onStateChange(e){
+        if(wpIgnoreEvents) return;
+        if(e.data === YT.PlayerState.PAUSED && wpPlaying){
+          wpPlaying = false; updateWpButtons();
+          const t = safeGetTime();
+          socket.emit('watch-pause',{currentTime:t});
+        }
+        if(e.data === YT.PlayerState.PLAYING && !wpPlaying){
+          wpPlaying = true; updateWpButtons();
+          const t = safeGetTime();
+          socket.emit('watch-play',{currentTime:t});
+        }
+      }
+    }
+  });
+}
 
-  const title = state.title||'Watch Party';
-  document.getElementById('watch-topbar-title').textContent=title;
-  document.getElementById('watch-title-bar').textContent=title;
+// Llama a una función del player de forma segura
+function wpCmd(fn, arg){
+  if(!wpPlayer || !wpPlayerReady) return false;
+  try{ wpPlayer[fn](arg); return true; }catch(e){ return false; }
+}
 
-  // Mobile info panel
-  const mobTitle=document.getElementById('mob-watch-title');
+function safeGetTime(){
+  try{ return (wpPlayer&&wpPlayerReady) ? wpPlayer.getCurrentTime() : 0; }catch(e){ return 0; }
+}
+
+function updateWpButtons(){
+  const label = wpPlaying ? '⏸ Pausar' : '▶ Play';
+  ['wp-play-btn','mob-play-btn'].forEach(id=>{ const el=document.getElementById(id); if(el) el.textContent=label; });
+}
+
+// ── WATCH PARTY SOCKET EVENTS ─────────────────────────────
+socket.on('watch-state', state => {
+  if(!state.active){ if(wpActive) leaveWatchPartyLocal(); return; }
+
+  const isNewVideo = !wpActive || wpCurrentVid !== state.videoId;
+  wpActive  = true;
+  wpVideoId = state.videoId;
+  wpPlaying = state.playing;
+
+  // Tiempo estimado compensando latencia de red
+  const elapsed = state.playing ? (Date.now() - state.lastSync) / 1000 : 0;
+  const syncTime = Math.max(0, (state.currentTime||0) + elapsed);
+
+  // Actualizar textos
+  const title = state.title || 'Watch Party';
+  ['watch-topbar-title','watch-title-bar','mob-watch-title'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.textContent=title;
+  });
   const mobBy=document.getElementById('mob-watch-by');
-  if(mobTitle) mobTitle.textContent=title;
-  if(mobBy && state.startedBy) mobBy.textContent=`Iniciada por ${state.startedBy}`;
+  if(mobBy) mobBy.textContent = state.startedBy ? `Iniciada por ${state.startedBy}` : '';
 
-  const mobPlayBtn=document.getElementById('mob-play-btn');
-  if(mobPlayBtn) mobPlayBtn.textContent=state.playing?'⏸ Pausar':'▶ Play';
+  document.getElementById('watch-party-btn').classList.add('live');
+  document.getElementById('watch-party-btn').innerHTML='<div class="watch-dot"></div> LIVE';
+  updateWpButtons();
 
-  // Load video in iframe
-  const iframe=document.getElementById('watch-iframe');
-  const newSrc=`https://www.youtube.com/embed/${state.videoId}?enablejsapi=1&autoplay=0&rel=0&modestbranding=1`;
-  if(!iframe.src.includes(state.videoId)) iframe.src=newSrc;
+  if(isNewVideo){
+    // FIX 1: usar YT.Player API real, no iframe src
+    createWpPlayer(state.videoId, syncTime, state.playing);
+  } else {
+    // Mismo video: solo sincronizar posición
+    wpIgnoreEvents = true;
+    if(state.playing){ wpCmd('seekTo', syncTime); wpCmd('playVideo'); }
+    else { wpCmd('pauseVideo'); wpCmd('seekTo', syncTime); }
+    setTimeout(()=>{ wpIgnoreEvents=false; }, 500);
+  }
 
-  document.getElementById('wp-play-btn').textContent=state.playing?'⏸ Pausar':'▶ Play';
   showWatchView();
 });
 
-socket.on('watch-play',({currentTime})=>{
-  wpPlaying=true;
-  document.getElementById('wp-play-btn').textContent='⏸ Pausar';
-  const mobBtn=document.getElementById('mob-play-btn'); if(mobBtn) mobBtn.textContent='⏸ Pausar';
-  const iframe=document.getElementById('watch-iframe');
-  if(iframe.contentWindow) iframe.contentWindow.postMessage(JSON.stringify({event:'command',func:'playVideo',args:''}),'*');
+// Alguien dio play
+socket.on('watch-play', ({currentTime}) => {
+  wpPlaying = true; updateWpButtons();
+  wpIgnoreEvents = true;
+  wpCmd('seekTo', currentTime + 0.2);
+  wpCmd('playVideo');
+  setTimeout(()=>{ wpIgnoreEvents=false; }, 500);
 });
 
-socket.on('watch-pause',({currentTime})=>{
-  wpPlaying=false;
-  document.getElementById('wp-play-btn').textContent='▶ Play';
-  const mobBtn=document.getElementById('mob-play-btn'); if(mobBtn) mobBtn.textContent='▶ Play';
-  const iframe=document.getElementById('watch-iframe');
-  if(iframe.contentWindow) iframe.contentWindow.postMessage(JSON.stringify({event:'command',func:'pauseVideo',args:''}),'*');
+// Alguien pausó
+socket.on('watch-pause', ({currentTime}) => {
+  wpPlaying = false; updateWpButtons();
+  wpIgnoreEvents = true;
+  wpCmd('pauseVideo');
+  wpCmd('seekTo', currentTime);
+  setTimeout(()=>{ wpIgnoreEvents=false; }, 500);
 });
 
-socket.on('watch-seek',({currentTime})=>{
-  const iframe=document.getElementById('watch-iframe');
-  if(iframe.contentWindow) iframe.contentWindow.postMessage(JSON.stringify({event:'command',func:'seekTo',args:[currentTime,true]}),'*');
+// Seek externo
+socket.on('watch-seek', ({currentTime}) => {
+  wpIgnoreEvents = true;
+  wpCmd('seekTo', currentTime);
+  setTimeout(()=>{ wpIgnoreEvents=false; }, 300);
 });
 
-socket.on('watch-error',msg=>alert('Watch Party: '+msg));
+socket.on('watch-error', msg => alert('Watch Party: ' + msg));
 
+// Botón Play/Pausa
 function wpTogglePlay(){
-  if(wpPlaying){
-    socket.emit('watch-pause',{currentTime:0});
-  } else {
-    socket.emit('watch-play',{currentTime:0});
+  if(!wpPlayer || !wpPlayerReady){
+    // FIX: en móvil si el player no está listo, intentar crearlo de nuevo
+    if(wpCurrentVid) createWpPlayer(wpCurrentVid, wpPendingTime, true);
+    return;
   }
-  wpPlaying=!wpPlaying;
-  document.getElementById('wp-play-btn').textContent=wpPlaying?'⏸ Pausar':'▶ Play';
+  const t = safeGetTime();
+  if(wpPlaying) socket.emit('watch-pause',{currentTime:t});
+  else          socket.emit('watch-play', {currentTime:t});
 }
 
-function requestSync(){socket.emit('watch-sync-request');}
+// FIX 3: Sync real — pide estado y lo aplica
+function requestSync(){
+  socket.emit('watch-sync-request');
+}
 
 function leaveWatchParty(){
   socket.emit('watch-stop');
@@ -923,33 +1031,35 @@ function leaveWatchParty(){
 }
 
 function leaveWatchPartyLocal(){
-  wpActive=false; wpVideoId=null; wpPlaying=false;
-  document.getElementById('watch-iframe').src='';
+  wpActive=false; wpVideoId=null; wpPlaying=false; wpCurrentVid=null;
+  wpIgnoreEvents=true;
+  if(wpPlayer){ try{ wpPlayer.destroy(); }catch(e){} wpPlayer=null; wpPlayerReady=false; }
+  const wrap=document.getElementById('yt-embed-wrap');
+  if(wrap){ wrap.innerHTML=''; }
   document.getElementById('watch-party-btn').classList.remove('live');
   document.getElementById('watch-party-btn').innerHTML='🎬 Watch Party';
   showChat();
 }
 
-// Watch party chat
+// Watch party chat - desktop
 function sendWatchMsg(){
   const el=document.getElementById('watch-msg-in'); const t=el.value.trim(); if(!t)return;
   socket.emit('chat-message',t); el.value='';
 }
 document.getElementById('watch-msg-in').addEventListener('keydown',e=>e.key==='Enter'&&sendWatchMsg());
 
-// Viewers count
-socket.on('user-list',users=>{
-  // Online sidebar
+// User list — UN SOLO handler para todo
+socket.on('user-list', users => {
+  // Sidebar online
   document.getElementById('online-list').innerHTML=users.map(u=>`
     <div class="online-user">
       ${u.avatar?`<div class="u-avatar"><img src="${u.avatar}" alt=""/></div>`:`<div class="u-avatar ${getAv(u.name)}">${ini(u.name)}</div>`}
       <span>${esc(u.name)}</span>
     </div>`).join('');
-  // Watch party viewers
-  if(wpActive){
-    const vb=document.getElementById('viewers-badge'); if(vb) vb.textContent=`${users.length} viendo`;
-    const mv=document.getElementById('mob-viewers'); if(mv) mv.textContent=`${users.length} personas viendo`;
-  }
+  // Viewers badge — siempre actualizar aunque no esté en watch party
+  const count = users.length;
+  const vb=document.getElementById('viewers-badge'); if(vb) vb.textContent=`${count} viendo`;
+  const mv=document.getElementById('mob-viewers'); if(mv) mv.textContent=`${count} persona${count!==1?'s':''} viendo`;
 });
 
 // ── MÚSICA ────────────────────────────────────────────────

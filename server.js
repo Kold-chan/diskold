@@ -173,17 +173,17 @@ io.on('connection', socket => {
   socket.on('watch-play', ({currentTime}) => {
     if(!users[socket.id]) return;
     watchParty.playing=true;
-    watchParty.currentTime=currentTime;
+    watchParty.currentTime=currentTime||0;
     watchParty.lastSync=Date.now();
-    socket.broadcast.emit('watch-play',{currentTime});
+    socket.broadcast.emit('watch-play',{currentTime:watchParty.currentTime});
   });
 
   socket.on('watch-pause', ({currentTime}) => {
     if(!users[socket.id]) return;
     watchParty.playing=false;
-    watchParty.currentTime=currentTime;
+    watchParty.currentTime=currentTime||0;
     watchParty.lastSync=Date.now();
-    socket.broadcast.emit('watch-pause',{currentTime});
+    socket.broadcast.emit('watch-pause',{currentTime:watchParty.currentTime});
   });
 
   socket.on('watch-seek', ({currentTime}) => {
@@ -194,7 +194,13 @@ io.on('connection', socket => {
   });
 
   socket.on('watch-sync-request', () => {
-    socket.emit('watch-state',watchParty);
+    // Calcular tiempo actual del video en el servidor
+    if(watchParty.playing){
+      const elapsed = (Date.now() - watchParty.lastSync) / 1000;
+      watchParty.currentTime = (watchParty.currentTime||0) + elapsed;
+      watchParty.lastSync = Date.now();
+    }
+    socket.emit('watch-state', watchParty);
   });
 
   socket.on('watch-stop', () => {
