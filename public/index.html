@@ -232,15 +232,164 @@
     @keyframes modalIn{from{opacity:0;transform:scale(.93)}to{opacity:1;transform:none}}
     @keyframes pulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(57,255,192,.4)}50%{opacity:.7;box-shadow:0 0 0 5px rgba(57,255,192,0)}}
 
+    /* ── DESKTOP (>768px) — video izquierda, chat derecha ── */
+    @media(min-width:769px){
+      .watch-view{ flex-direction:row; }
+      .watch-video-area{ flex:1; display:flex; flex-direction:column; }
+      .watch-chat-panel{ width:280px; display:flex; flex-direction:column; border-left:1px solid rgba(255,255,255,.08); }
+      .watch-mobile-chat{ display:none !important; }
+      .watch-tabs{ display:none !important; }
+    }
+
+    /* ── MOBILE (<768px) — video arriba, chat/controles abajo ── */
     @media(max-width:768px){
+      /* Sidebar */
       .nav-toggle{display:flex;align-items:center;}
-      .sidebar{position:fixed;top:52px;left:0;bottom:0;width:250px;z-index:50;transform:translateX(-100%);box-shadow:4px 0 40px rgba(0,0,0,.5);}
+      .sidebar{position:fixed;top:52px;left:0;bottom:0;width:260px;z-index:50;transform:translateX(-100%);box-shadow:4px 0 40px rgba(0,0,0,.5);}
       .sidebar.open{transform:translateX(0);}
       .topbar-channel,.topbar-name{display:none;}
-      .watch-chat-panel{width:220px;}
+
+      /* Auth card más compacta */
+      .auth-card{padding:28px 20px;}
+      .auth-logo{font-size:2.4rem;}
+
+      /* Watch Party mobile: layout vertical */
+      .watch-view{
+        flex-direction:column !important;
+        background:#000;
+      }
+      .watch-video-area{
+        flex:none !important;
+        width:100%;
+        /* 16:9 ratio */
+        height:calc(100vw * 9/16);
+        display:flex;
+        flex-direction:column;
+        position:relative;
+      }
+      .watch-topbar{
+        position:absolute;
+        top:0;left:0;right:0;
+        height:44px;
+        z-index:5;
+        background:linear-gradient(to bottom,rgba(0,0,0,.85),transparent);
+        border:none;
+      }
+      .watch-topbar-title{font-size:.85rem;}
+      .watch-close-btn{font-size:.72rem;padding:5px 10px;}
+      .viewers-badge{font-size:.65rem;}
+      .yt-embed-wrap{flex:1;position:relative;}
+      #watch-iframe{position:absolute;inset:0;width:100%;height:100%;}
+
+      /* Controles debajo del video */
+      .watch-controls{
+        position:static !important;
+        height:52px;
+        background:rgba(0,0,0,.95);
+        border-top:1px solid rgba(255,255,255,.08);
+        padding:0 12px;
+        gap:8px;
+      }
+      .w-btn{padding:6px 12px;font-size:.78rem;}
+      .watch-title-bar{font-size:.72rem;}
+
+      /* Chat panel de escritorio - oculto en móvil */
+      .watch-chat-panel{display:none !important;}
+
+      /* Panel móvil de chat que ocupa el espacio restante */
+      .watch-mobile-bottom{
+        flex:1;
+        display:flex;
+        flex-direction:column;
+        background:var(--bg2);
+        overflow:hidden;
+        min-height:0;
+      }
+
+      /* Tabs: Chat / Info */
+      .watch-tabs{
+        display:flex !important;
+        background:var(--bg3);
+        border-bottom:1px solid var(--line);
+        flex-shrink:0;
+      }
+      .watch-tab{
+        flex:1;
+        padding:10px;
+        border:none;
+        background:none;
+        color:var(--muted);
+        font-family:'DM Sans',sans-serif;
+        font-size:.85rem;
+        font-weight:600;
+        cursor:pointer;
+        transition:all .2s;
+        border-bottom:2px solid transparent;
+      }
+      .watch-tab.active{color:var(--purple);border-bottom-color:var(--purple);}
+
+      .watch-mobile-chat{
+        flex:1;
+        overflow-y:auto;
+        padding:10px 12px;
+        display:flex;
+        flex-direction:column;
+        gap:2px;
+      }
+      .watch-mobile-chat::-webkit-scrollbar{display:none;}
+
+      .watch-mobile-input{
+        padding:8px 12px;
+        border-top:1px solid var(--line);
+        display:flex;
+        gap:8px;
+        align-items:center;
+        flex-shrink:0;
+        /* Sube cuando aparece el teclado */
+        position:sticky;
+        bottom:0;
+        background:var(--bg2);
+      }
+      .watch-mobile-input input{
+        flex:1;background:var(--bg3);border:1px solid var(--line);
+        border-radius:20px;padding:9px 14px;color:var(--text);
+        font-family:'DM Sans',sans-serif;font-size:.9rem;outline:none;
+      }
+      .watch-mobile-input input:focus{border-color:var(--icedim);}
+      .watch-mobile-send{
+        background:var(--purple);border:none;border-radius:50%;
+        width:36px;height:36px;color:#fff;font-size:.9rem;
+        cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;
+      }
+
+      /* Music player más compacto en móvil */
+      .music-player{padding:8px 12px;}
+      .music-thumb{width:36px;height:36px;}
+      .music-title{font-size:.78rem;}
+      .music-req{font-size:.62rem;}
+      .m-btn{padding:5px 8px;font-size:.82rem;}
+      .vol-slider{width:55px;}
+
+      /* Input area con teclado virtual */
+      .input-area{padding:8px 10px;}
+      .input-row{padding:9px 12px;}
+
+      /* Topbar Watch Party btn más pequeño */
+      .watch-party-btn{padding:5px 8px;font-size:.7rem;}
+      .watch-party-btn span:not(.watch-dot){display:none;}
+      .watch-party-btn::after{content:'🎬';}
+      .watch-party-btn.live::after{content:'';}
+
+      /* Modal más compacta */
+      .modal{padding:24px 20px;gap:12px;}
+      .modal-title{font-size:1.3rem;}
     }
-    @media(max-width:520px){
-      .watch-chat-panel{display:none;}
+
+    /* ── EXTRA SMALL (<400px) ── */
+    @media(max-width:400px){
+      .auth-card{padding:22px 16px;gap:12px;}
+      .watch-controls .watch-title-bar{display:none;}
+      .w-btn{padding:5px 9px;font-size:.72rem;}
     }
 
     .av0{background:#1e3a5f;color:var(--cold);}
@@ -376,7 +525,7 @@
       <div class="watch-view" id="watch-view">
         <div class="watch-video-area">
           <div class="watch-topbar">
-            <span style="color:var(--purple);font-size:1rem;">🎬</span>
+            <span style="color:var(--purple);font-size:1rem;flex-shrink:0;">🎬</span>
             <span class="watch-topbar-title" id="watch-topbar-title">Watch Party</span>
             <div class="viewers-badge" id="viewers-badge">0 viendo</div>
             <button class="watch-close-btn" onclick="leaveWatchParty()">✕ Salir</button>
@@ -393,6 +542,7 @@
             <button class="w-btn" onclick="requestSync()">⟳ Sincronizar</button>
           </div>
         </div>
+        <!-- DESKTOP chat panel -->
         <div class="watch-chat-panel">
           <div class="watch-chat-header">
             <span>💬</span>
@@ -406,6 +556,40 @@
             </div>
           </div>
         </div>
+
+        <!-- MOBILE bottom panel -->
+        <div class="watch-mobile-bottom" id="watch-mobile-bottom" style="display:none;">
+          <div class="watch-tabs" style="display:none;">
+            <button class="watch-tab active" id="tab-chat" onclick="switchWatchTab('chat')">💬 Chat</button>
+            <button class="watch-tab" id="tab-info" onclick="switchWatchTab('info')">🎬 Info</button>
+          </div>
+          <!-- Chat tab -->
+          <div id="watch-tab-chat" style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0;">
+            <div class="watch-mobile-chat" id="watch-mobile-messages"></div>
+            <div class="watch-mobile-input">
+              <input id="watch-mob-input" type="text" placeholder="Comenta el video..." maxlength="300"/>
+              <button class="watch-mobile-send" onclick="sendWatchMsgMobile()">▶</button>
+            </div>
+          </div>
+          <!-- Info tab -->
+          <div id="watch-tab-info" style="display:none;flex:1;padding:16px;overflow-y:auto;">
+            <div style="display:flex;flex-direction:column;gap:12px;">
+              <div style="font-size:.78rem;color:var(--muted);font-family:'Space Mono',monospace;">REPRODUCIENDO</div>
+              <div id="mob-watch-title" style="font-weight:700;font-size:1rem;color:var(--text);line-height:1.4;"></div>
+              <div id="mob-watch-by" style="font-size:.78rem;color:var(--muted);font-family:'Space Mono',monospace;"></div>
+              <div style="display:flex;gap:8px;margin-top:4px;">
+                <button class="w-btn" style="flex:1;padding:12px;" id="mob-play-btn" onclick="wpTogglePlay()">▶ Play</button>
+                <button class="w-btn" style="flex:1;padding:12px;" onclick="requestSync()">⟳ Sync</button>
+                <button class="w-btn" style="flex:1;padding:12px;background:rgba(255,68,102,.1);border-color:rgba(255,68,102,.3);color:var(--red);" onclick="leaveWatchParty()">✕ Salir</button>
+              </div>
+              <div style="margin-top:8px;padding:12px;background:var(--bg3);border-radius:var(--r);border:1px solid var(--line);">
+                <div style="font-size:.7rem;color:var(--muted);font-family:'Space Mono',monospace;margin-bottom:6px;">VIENDO AHORA</div>
+                <div class="viewers-badge" id="mob-viewers" style="color:var(--purple);font-size:.82rem;">0 personas</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
 
     </div>
@@ -563,6 +747,8 @@ document.getElementById('profile-file').addEventListener('change',async e=>{
 });
 
 // ── VIEWS ─────────────────────────────────────────────────
+function isMobile(){ return window.innerWidth <= 768; }
+
 function showChat(){
   document.getElementById('chat-view').style.display='flex';
   document.getElementById('watch-view').classList.remove('active');
@@ -576,7 +762,31 @@ function showWatchView(){
   document.getElementById('chat-view').style.display='none';
   document.getElementById('watch-view').classList.add('active');
   document.getElementById('topbar-ch').textContent='🎬 Watch Party';
+
+  // Mostrar panel móvil si es celular
+  const mob = document.getElementById('watch-mobile-bottom');
+  if(isMobile()){
+    mob.style.display='flex';
+    mob.style.flexDirection='column';
+  } else {
+    mob.style.display='none';
+  }
 }
+
+// Tabs del watch party móvil
+function switchWatchTab(tab){
+  document.getElementById('watch-tab-chat').style.display = tab==='chat' ? 'flex' : 'none';
+  document.getElementById('watch-tab-info').style.display = tab==='info' ? 'block' : 'none';
+  document.getElementById('tab-chat').classList.toggle('active', tab==='chat');
+  document.getElementById('tab-info').classList.toggle('active', tab==='info');
+}
+
+// Chat móvil del watch party
+function sendWatchMsgMobile(){
+  const el=document.getElementById('watch-mob-input'); const t=el.value.trim(); if(!t)return;
+  socket.emit('chat-message',t); el.value='';
+}
+document.getElementById('watch-mob-input').addEventListener('keydown',e=>e.key==='Enter'&&sendWatchMsgMobile());
 
 // ── SIDEBAR MOBILE ────────────────────────────────────────
 function toggleSidebar(){document.getElementById('sidebar').classList.toggle('open');document.getElementById('sb-overlay').classList.toggle('open');}
@@ -619,16 +829,10 @@ function addMsg(msg, box){
 
 socket.on('chat-message',msg=>{
   addMsg(msg, document.getElementById('messages'));
-  // También en el chat del watch party si está activo
-  if(wpActive) addMsg(msg, document.getElementById('watch-messages'));
-});
-
-socket.on('user-list',users=>{
-  document.getElementById('online-list').innerHTML=users.map(u=>`
-    <div class="online-user">
-      ${u.avatar?`<div class="u-avatar"><img src="${u.avatar}" alt=""/></div>`:`<div class="u-avatar ${getAv(u.name)}">${ini(u.name)}</div>`}
-      <span>${esc(u.name)}</span>
-    </div>`).join('');
+  if(wpActive){
+    addMsg(msg, document.getElementById('watch-messages'));        // desktop
+    addMsg(msg, document.getElementById('watch-mobile-messages')); // mobile
+  }
 });
 
 // ── WATCH PARTY ───────────────────────────────────────────
@@ -654,15 +858,25 @@ socket.on('watch-state',state=>{
 
   const btn=document.getElementById('watch-party-btn');
   btn.classList.add('live');
-  btn.innerHTML=`<div class="watch-dot"></div> Watch Party LIVE`;
+  btn.innerHTML=`<div class="watch-dot"></div> LIVE`;
 
-  document.getElementById('watch-topbar-title').textContent=state.title||'Watch Party';
-  document.getElementById('watch-title-bar').textContent=state.title||'—';
+  const title = state.title||'Watch Party';
+  document.getElementById('watch-topbar-title').textContent=title;
+  document.getElementById('watch-title-bar').textContent=title;
+
+  // Mobile info panel
+  const mobTitle=document.getElementById('mob-watch-title');
+  const mobBy=document.getElementById('mob-watch-by');
+  if(mobTitle) mobTitle.textContent=title;
+  if(mobBy && state.startedBy) mobBy.textContent=`Iniciada por ${state.startedBy}`;
+
+  const mobPlayBtn=document.getElementById('mob-play-btn');
+  if(mobPlayBtn) mobPlayBtn.textContent=state.playing?'⏸ Pausar':'▶ Play';
 
   // Load video in iframe
   const iframe=document.getElementById('watch-iframe');
-  const currentSrc=`https://www.youtube.com/embed/${state.videoId}?enablejsapi=1&autoplay=0&rel=0&modestbranding=1`;
-  if(!iframe.src.includes(state.videoId)) iframe.src=currentSrc;
+  const newSrc=`https://www.youtube.com/embed/${state.videoId}?enablejsapi=1&autoplay=0&rel=0&modestbranding=1`;
+  if(!iframe.src.includes(state.videoId)) iframe.src=newSrc;
 
   document.getElementById('wp-play-btn').textContent=state.playing?'⏸ Pausar':'▶ Play';
   showWatchView();
@@ -671,6 +885,7 @@ socket.on('watch-state',state=>{
 socket.on('watch-play',({currentTime})=>{
   wpPlaying=true;
   document.getElementById('wp-play-btn').textContent='⏸ Pausar';
+  const mobBtn=document.getElementById('mob-play-btn'); if(mobBtn) mobBtn.textContent='⏸ Pausar';
   const iframe=document.getElementById('watch-iframe');
   if(iframe.contentWindow) iframe.contentWindow.postMessage(JSON.stringify({event:'command',func:'playVideo',args:''}),'*');
 });
@@ -678,6 +893,7 @@ socket.on('watch-play',({currentTime})=>{
 socket.on('watch-pause',({currentTime})=>{
   wpPlaying=false;
   document.getElementById('wp-play-btn').textContent='▶ Play';
+  const mobBtn=document.getElementById('mob-play-btn'); if(mobBtn) mobBtn.textContent='▶ Play';
   const iframe=document.getElementById('watch-iframe');
   if(iframe.contentWindow) iframe.contentWindow.postMessage(JSON.stringify({event:'command',func:'pauseVideo',args:''}),'*');
 });
@@ -723,8 +939,16 @@ document.getElementById('watch-msg-in').addEventListener('keydown',e=>e.key==='E
 
 // Viewers count
 socket.on('user-list',users=>{
+  // Online sidebar
+  document.getElementById('online-list').innerHTML=users.map(u=>`
+    <div class="online-user">
+      ${u.avatar?`<div class="u-avatar"><img src="${u.avatar}" alt=""/></div>`:`<div class="u-avatar ${getAv(u.name)}">${ini(u.name)}</div>`}
+      <span>${esc(u.name)}</span>
+    </div>`).join('');
+  // Watch party viewers
   if(wpActive){
-    document.getElementById('viewers-badge').textContent=`${users.length} viendo`;
+    const vb=document.getElementById('viewers-badge'); if(vb) vb.textContent=`${users.length} viendo`;
+    const mv=document.getElementById('mob-viewers'); if(mv) mv.textContent=`${users.length} personas viendo`;
   }
 });
 
