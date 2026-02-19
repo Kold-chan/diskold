@@ -1,7 +1,7 @@
 {
   "name": "diskold",
-  "version": "2.0.0",
-  "description": "Diskold — Chat, voz, música y cuentas. Creado por Kold.",
+  "version": "3.0.0",
+  "description": "Diskold — Chat, voz, música y Watch Party. Creado por Kold.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -12,10 +12,7 @@
   "build": {
     "appId": "com.kold.diskold",
     "productName": "Diskold",
-    "win": {
-      "target": "nsis",
-      "icon": "public/icon-512.png"
-    }
+    "win": { "target": "nsis", "icon": "public/icon-512.png" }
   },
   "dependencies": {
     "express": "^4.18.2",
