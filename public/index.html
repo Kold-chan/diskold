@@ -453,11 +453,19 @@
     <div class="sidebar" id="sidebar">
       <div class="sidebar-section">
         <div class="section-label">Canales de texto</div>
-        <div id="text-channels-list"></div>
+        <div class="ch-item" id="ch-kbros" onclick="tryChannel('kbros','moscosos')"><span class="ch-sym">🔒</span> kbros</div>
+        <div class="ch-item" id="ch-vcby"  onclick="tryChannel('vcby','akatsuki')"><span class="ch-sym">🔒</span> vcby</div>
       </div>
       <div class="sidebar-section">
         <div class="section-label">Canales de voz</div>
-        <div id="voice-channels-list"></div>
+        <div class="voice-room" id="vr-kbros">
+          <div class="voice-room-head" onclick="tryVoice('kbros','moscosos')"><span>🔒</span><span>kbros</span></div>
+          <div class="voice-peers" id="vp-kbros"><span style="font-size:.7rem;color:var(--muted);font-style:italic">vacía</span></div>
+        </div>
+        <div class="voice-room" id="vr-vcby" style="margin-top:6px;">
+          <div class="voice-room-head" onclick="tryVoice('vcby','akatsuki')"><span>🔒</span><span>vcby</span></div>
+          <div class="voice-peers" id="vp-vcby"><span style="font-size:.7rem;color:var(--muted);font-style:italic">vacía</span></div>
+        </div>
       </div>
       <div class="sidebar-section" style="flex:1;overflow:hidden;display:flex;flex-direction:column;padding-bottom:0;">
         <div class="section-label">En línea</div>
@@ -467,7 +475,7 @@
         <div class="call-status" id="call-status"><div class="pulse"></div> En llamada · <span id="call-room-label"></span></div>
         <div class="call-btns">
           <button class="c-btn" id="mic-btn" onclick="toggleMic()" title="Micrófono">🎤</button>
-          <button class="c-btn" id="voice-leave-btn" onclick="leaveVoice()" title="Salir de voz" style="display:none;">📵 Salir</button>
+          <button class="c-btn" id="voice-leave-btn" onclick="leaveVoice()" title="Salir" style="display:none;">📵</button>
         </div>
         <div class="credits-btn" onclick="openProfile()">mi perfil</div>
       </div>
@@ -603,36 +611,19 @@
   </div>
 </div>
 
-<!-- VOICE ROOM PASSWORD MODAL -->
-<div class="modal-overlay" id="voice-modal" onclick="if(event.target===this)closeVoiceModal()">
+<!-- PASSWORD MODAL (reutilizable para texto y voz) -->
+<div class="modal-overlay" id="pass-modal" onclick="if(event.target===this)closePassModal()">
   <div class="modal">
-    <div class="modal-title" style="color:var(--green);">◈ SALA DE VOZ</div>
-    <div class="modal-sub" id="voice-modal-name" style="color:var(--muted);font-family:'Space Mono',monospace;font-size:.8rem;"></div>
+    <div class="modal-title" id="pass-modal-title" style="color:var(--gold);">🔒 ACCESO</div>
+    <div class="modal-sub" id="pass-modal-sub" style="color:var(--muted);font-family:'Space Mono',monospace;font-size:.8rem;letter-spacing:1px;"></div>
     <div class="auth-field" style="gap:6px;">
       <label class="auth-label">Clave de acceso</label>
-      <input class="modal-input" id="voice-pass-input" type="password" placeholder="Ingresa la clave..."/>
+      <input class="modal-input" id="pass-modal-input" type="password" placeholder="Ingresa la clave..."/>
     </div>
-    <div class="auth-error" id="voice-pass-error"></div>
+    <div id="pass-modal-error" style="display:none;font-size:.8rem;color:var(--red);font-family:'Space Mono',monospace;padding:7px 10px;background:rgba(255,68,102,.08);border-radius:8px;border:1px solid rgba(255,68,102,.2);"></div>
     <div class="modal-btns">
-      <button class="btn-cancel" onclick="closeVoiceModal()">Cancelar</button>
-      <button class="btn-purple" style="background:var(--green);color:#000;" onclick="submitVoicePass()">ENTRAR</button>
-    </div>
-  </div>
-</div>
-
-<!-- CHANNEL PASSWORD MODAL -->
-<div class="modal-overlay" id="ch-modal" onclick="if(event.target===this)closeChanModal()">
-  <div class="modal">
-    <div class="modal-title" style="color:var(--gold);">🔒 CANAL PRIVADO</div>
-    <div class="modal-sub" id="ch-modal-name" style="color:var(--muted);font-family:'Space Mono',monospace;font-size:.8rem;"></div>
-    <div class="auth-field" style="gap:6px;">
-      <label class="auth-label">Clave de acceso</label>
-      <input class="modal-input" id="ch-pass-input" type="password" placeholder="Ingresa la clave..."/>
-    </div>
-    <div class="auth-error" id="ch-pass-error"></div>
-    <div class="modal-btns">
-      <button class="btn-cancel" onclick="closeChanModal()">Cancelar</button>
-      <button class="btn-purple" style="background:var(--gold);color:#000;" onclick="submitChanPass()">ENTRAR</button>
+      <button class="btn-cancel" onclick="closePassModal()">Cancelar</button>
+      <button class="btn-purple" id="pass-modal-btn" onclick="submitPassModal()">ENTRAR</button>
     </div>
   </div>
 </div>
@@ -775,78 +766,64 @@ function enterApp(data){
   requestWakeLock();
 }
 
-// ── ROOMS INFO (desde servidor) ───────────────────────────
-let allChannels = [];
-let allVoices   = [];
-let unlockedVoices = new Set(); // salas de voz que ya desbloqueamos
-
-socket.on('rooms-info', ({ channels, voices }) => {
-  allChannels = channels;
-  allVoices   = voices;
-  renderTextChannels();
-  renderVoiceChannels();
-});
-
-function renderTextChannels() {
-  const el = document.getElementById('text-channels-list');
-  if (!el) return;
-  el.innerHTML = allChannels.map(ch => `
-    <div class="ch-item ${myChannel===ch.id?'active':''}" id="ch-${ch.id}" onclick="tryChannel('${ch.id}')">
-      <span class="ch-sym">${ch.locked?'🔒':'#'}</span> ${ch.id}
-    </div>`).join('');
-}
-
-function renderVoiceChannels() {
-  const el = document.getElementById('voice-channels-list');
-  if (!el) return;
-  el.innerHTML = allVoices.map(v => `
-    <div class="voice-room" id="vr-${v.id}">
-      <div class="voice-room-head" onclick="tryVoiceRoom('${v.id}')">
-        <span>${v.locked && !unlockedVoices.has(v.id) ? '🔒' : '◈'}</span>
-        <span>${v.label}</span>
-        ${inVoice && currentVoiceRoom===v.id ? '<span style="color:var(--green);margin-left:auto;font-size:.65rem;">● EN VIVO</span>' : ''}
-      </div>
-      <div class="voice-peers" id="vp-${v.id}"><span style="font-size:.7rem;color:var(--muted);font-style:italic">vacía</span></div>
-    </div>`).join('');
-}
-
 // ── CANALES DE TEXTO ─────────────────────────────────────
-let pendingChannel = null;
+const unlockedChans  = new Set();
+const unlockedVoices = new Set();
+let currentVoiceRoom = null;
 
-function tryChannel(channel) {
-  const ch = allChannels.find(c => c.id === channel);
-  if (!ch) return;
-  if (!ch.locked) { switchChannel(channel); return; }
-  pendingChannel = channel;
-  document.getElementById('ch-modal-name').textContent = '# ' + channel;
-  document.getElementById('ch-pass-input').value = '';
-  document.getElementById('ch-pass-error').classList.remove('show');
-  document.getElementById('ch-modal').classList.add('open');
-  setTimeout(() => document.getElementById('ch-pass-input').focus(), 100);
+// Un solo modal de contraseña reutilizable
+let _passCorrect = null;
+let _passOnOk    = null;
+
+function openPassModal(tipo, nombre, correctPass, onOk) {
+  _passCorrect = correctPass;
+  _passOnOk    = onOk;
+  document.getElementById('pass-modal-title').textContent = tipo === 'voz' ? '◈ SALA DE VOZ' : '🔒 CANAL PRIVADO';
+  document.getElementById('pass-modal-title').style.color = tipo === 'voz' ? 'var(--green)' : 'var(--gold)';
+  document.getElementById('pass-modal-btn').style.background = tipo === 'voz' ? 'var(--green)' : 'var(--gold)';
+  document.getElementById('pass-modal-sub').textContent   = nombre;
+  document.getElementById('pass-modal-input').value       = '';
+  document.getElementById('pass-modal-error').style.display = 'none';
+  document.getElementById('pass-modal').classList.add('open');
+  setTimeout(() => document.getElementById('pass-modal-input').focus(), 100);
 }
 
-function closeChanModal() { document.getElementById('ch-modal').classList.remove('open'); pendingChannel = null; }
-document.getElementById('ch-pass-input').addEventListener('keydown', e => e.key === 'Enter' && submitChanPass());
+function closePassModal() {
+  document.getElementById('pass-modal').classList.remove('open');
+  _passCorrect = null; _passOnOk = null;
+}
 
-async function submitChanPass() {
-  const password = document.getElementById('ch-pass-input').value;
-  const errEl = document.getElementById('ch-pass-error');
-  errEl.classList.remove('show');
-  const res = await fetch('/api/channel-join', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ channel: pendingChannel, password }) });
-  const data = await res.json();
-  if (!data.ok) { errEl.textContent = data.error; errEl.classList.add('show'); return; }
-  const ch = pendingChannel; closeChanModal(); switchChannel(ch);
+function submitPassModal() {
+  const val   = document.getElementById('pass-modal-input').value;
+  const errEl = document.getElementById('pass-modal-error');
+  if (val !== _passCorrect) {
+    errEl.textContent = 'Clave incorrecta.';
+    errEl.style.display = 'block';
+    document.getElementById('pass-modal-input').value = '';
+    document.getElementById('pass-modal-input').focus();
+    return;
+  }
+  const cb = _passOnOk;
+  closePassModal();
+  if (cb) cb();
+}
+
+document.getElementById('pass-modal-input').addEventListener('keydown', e => e.key === 'Enter' && submitPassModal());
+
+function tryChannel(channel, correctPass) {
+  if (unlockedChans.has(channel)) { switchChannel(channel); return; }
+  openPassModal('canal', channel, correctPass, () => { unlockedChans.add(channel); switchChannel(channel); });
 }
 
 function switchChannel(channel) {
-  if (channel === myChannel) return;
+  if (channel === myChannel) { closeSidebar(); return; }
   myChannel = channel;
   socket.emit('join-channel', { channel });
-  renderTextChannels();
-  const sym = allChannels.find(c => c.id === channel)?.locked ? '🔒' : '#';
-  document.getElementById('ch-header-sym').textContent = sym;
+  document.querySelectorAll('.ch-item').forEach(el => el.classList.remove('active'));
+  const el = document.getElementById('ch-' + channel); if (el) el.classList.add('active');
+  document.getElementById('ch-header-sym').textContent = '🔒';
   document.getElementById('ch-header-name').textContent = channel;
-  document.getElementById('topbar-ch').textContent = sym + ' ' + channel;
+  document.getElementById('topbar-ch').textContent = '🔒 ' + channel;
   document.getElementById('messages').innerHTML = '';
   if (wpActive) leaveWatchPartyLocal();
   showChat(); closeSidebar();
@@ -854,61 +831,34 @@ function switchChannel(channel) {
 
 socket.on('channel-joined', ({ channel }) => {
   myChannel = channel;
-  renderTextChannels();
-  // Si es el primer canal (al conectarse), actualizar topbar
-  const ch = allChannels.find(c => c.id === channel);
-  if (ch) {
-    const sym = ch.locked ? '🔒' : '#';
-    document.getElementById('topbar-ch').textContent = sym + ' ' + channel;
-    document.getElementById('ch-header-sym').textContent = sym;
-    document.getElementById('ch-header-name').textContent = channel;
-  }
+  document.querySelectorAll('.ch-item').forEach(el => el.classList.remove('active'));
+  const el = document.getElementById('ch-' + channel); if (el) el.classList.add('active');
+  document.getElementById('ch-header-sym').textContent = '🔒';
+  document.getElementById('ch-header-name').textContent = channel;
+  document.getElementById('topbar-ch').textContent = '🔒 ' + channel;
 });
 
 // ── SALAS DE VOZ ─────────────────────────────────────────
-let currentVoiceRoom = null;
-let pendingVoiceRoom = null;
-
-function tryVoiceRoom(roomId) {
+function tryVoice(roomId, correctPass) {
   if (inVoice && currentVoiceRoom === roomId) { leaveVoice(); return; }
-  const vr = allVoices.find(v => v.id === roomId);
-  if (!vr) return;
-  if (!vr.locked || unlockedVoices.has(roomId)) { joinVoice(roomId); return; }
-  pendingVoiceRoom = roomId;
-  document.getElementById('voice-modal-name').textContent = '◈ ' + roomId;
-  document.getElementById('voice-pass-input').value = '';
-  document.getElementById('voice-pass-error').classList.remove('show');
-  document.getElementById('voice-modal').classList.add('open');
-  setTimeout(() => document.getElementById('voice-pass-input').focus(), 100);
-}
-
-function closeVoiceModal() { document.getElementById('voice-modal').classList.remove('open'); pendingVoiceRoom = null; }
-document.getElementById('voice-pass-input').addEventListener('keydown', e => e.key === 'Enter' && submitVoicePass());
-
-async function submitVoicePass() {
-  const password = document.getElementById('voice-pass-input').value;
-  const errEl = document.getElementById('voice-pass-error');
-  errEl.classList.remove('show');
-  const res = await fetch('/api/voice-join', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ room: pendingVoiceRoom, password }) });
-  const data = await res.json();
-  if (!data.ok) { errEl.textContent = data.error; errEl.classList.add('show'); return; }
-  const room = pendingVoiceRoom;
-  unlockedVoices.add(room);
-  closeVoiceModal();
-  joinVoice(room);
+  if (unlockedVoices.has(roomId)) { joinVoice(roomId); return; }
+  openPassModal('voz', roomId, correctPass, () => { unlockedVoices.add(roomId); joinVoice(roomId); });
 }
 
 socket.on('voice-users', state => {
-  // state = { kbros: [{id,name},...], vcby: [...] }
-  Object.keys(state).forEach(roomId => {
-    const el = document.getElementById('vp-' + roomId);
+  ['kbros','vcby'].forEach(room => {
+    const el = document.getElementById('vp-' + room);
     if (!el) return;
-    const members = state[roomId];
+    const members = state[room] || [];
     el.innerHTML = members.length
       ? members.map(u => `<div class="peer-row"><div class="peer-dot"></div>${esc(u.name)}</div>`).join('')
       : `<span style="font-size:.7rem;color:var(--muted);font-style:italic">vacía</span>`;
+    const head = document.querySelector(`#vr-${room} .voice-room-head`);
+    if (head) {
+      const icon = head.querySelector('span:first-child');
+      if (icon) icon.textContent = (inVoice && currentVoiceRoom===room) ? '🔊' : '🔒';
+    }
   });
-  renderVoiceChannels(); // re-render to update live badge
 });
 
 function updateTopbarAvatar(){
@@ -954,9 +904,7 @@ function showChat(){
   document.getElementById('chat-view').style.display='flex';
   document.getElementById('watch-view').classList.remove('active');
   if(myChannel){
-    const ch=allChannels.find(c=>c.id===myChannel);
-    const sym=ch?.locked?'🔒':'#';
-    document.getElementById('topbar-ch').textContent=sym+' '+myChannel;
+    document.getElementById('topbar-ch').textContent='🔒 '+myChannel;
   }
   document.getElementById('watch-party-btn').classList.remove('live');
   document.getElementById('watch-party-btn').innerHTML='🎬 Watch Party';
