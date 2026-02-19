@@ -440,7 +440,7 @@
     <button class="nav-toggle" onclick="toggleSidebar()">☰</button>
     <span class="topbar-logo">DISKOLD</span>
     <span class="topbar-sep">|</span>
-    <span class="topbar-channel" id="topbar-ch"># general</span>
+    <span class="topbar-channel" id="topbar-ch">Diskold</span>
     <div class="topbar-right">
       <button class="watch-party-btn" id="watch-party-btn" onclick="openWatchModal()">🎬 Watch Party</button>
       <span class="topbar-name">hola, <b id="dn"></b></span>
@@ -452,26 +452,22 @@
     <div class="sidebar-overlay" id="sb-overlay" onclick="closeSidebar()"></div>
     <div class="sidebar" id="sidebar">
       <div class="sidebar-section">
-        <div class="section-label">Canales</div>
-        <div class="ch-item active" id="ch-general" onclick="switchChannel('general')"><span class="ch-sym">#</span> general</div>
-        <div class="ch-item" id="ch-kbros" onclick="tryChannel('kbros')"><span class="ch-sym">🔒</span> kbros</div>
+        <div class="section-label">Canales de texto</div>
+        <div id="text-channels-list"></div>
       </div>
       <div class="sidebar-section">
-        <div class="section-label">Voz</div>
-        <div class="voice-room" onclick="toggleVoice()">
-          <div class="voice-room-head"><span>◈</span><span>Sala General</span></div>
-          <div class="voice-peers" id="voice-peers"><span style="font-size:.7rem;color:var(--muted);font-style:italic">vacía</span></div>
-        </div>
+        <div class="section-label">Canales de voz</div>
+        <div id="voice-channels-list"></div>
       </div>
       <div class="sidebar-section" style="flex:1;overflow:hidden;display:flex;flex-direction:column;padding-bottom:0;">
         <div class="section-label">En línea</div>
         <div class="online-scroll" id="online-list"></div>
       </div>
       <div class="call-bar">
-        <div class="call-status" id="call-status"><div class="pulse"></div> En llamada</div>
+        <div class="call-status" id="call-status"><div class="pulse"></div> En llamada · <span id="call-room-label"></span></div>
         <div class="call-btns">
-          <button class="c-btn" id="mic-btn" onclick="toggleMic()">🎤</button>
-          <button class="c-btn" id="voice-btn" onclick="toggleVoice()">◈</button>
+          <button class="c-btn" id="mic-btn" onclick="toggleMic()" title="Micrófono">🎤</button>
+          <button class="c-btn" id="voice-leave-btn" onclick="leaveVoice()" title="Salir de voz" style="display:none;">📵 Salir</button>
         </div>
         <div class="credits-btn" onclick="openProfile()">mi perfil</div>
       </div>
@@ -607,6 +603,23 @@
   </div>
 </div>
 
+<!-- VOICE ROOM PASSWORD MODAL -->
+<div class="modal-overlay" id="voice-modal" onclick="if(event.target===this)closeVoiceModal()">
+  <div class="modal">
+    <div class="modal-title" style="color:var(--green);">◈ SALA DE VOZ</div>
+    <div class="modal-sub" id="voice-modal-name" style="color:var(--muted);font-family:'Space Mono',monospace;font-size:.8rem;"></div>
+    <div class="auth-field" style="gap:6px;">
+      <label class="auth-label">Clave de acceso</label>
+      <input class="modal-input" id="voice-pass-input" type="password" placeholder="Ingresa la clave..."/>
+    </div>
+    <div class="auth-error" id="voice-pass-error"></div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeVoiceModal()">Cancelar</button>
+      <button class="btn-purple" style="background:var(--green);color:#000;" onclick="submitVoicePass()">ENTRAR</button>
+    </div>
+  </div>
+</div>
+
 <!-- CHANNEL PASSWORD MODAL -->
 <div class="modal-overlay" id="ch-modal" onclick="if(event.target===this)closeChanModal()">
   <div class="modal">
@@ -651,7 +664,7 @@
 <script>
 // ── State ─────────────────────────────────────────────────
 let myToken='', myName='', myAvatar=null;
-let myChannel='general';
+let myChannel='';
 let inVoice=false, micMuted=false, localStream=null;
 const peers={};
 const socket=io();
@@ -762,65 +775,140 @@ function enterApp(data){
   requestWakeLock();
 }
 
-// ── CANALES ───────────────────────────────────────────────
-let pendingChannel = null;
+// ── ROOMS INFO (desde servidor) ───────────────────────────
+let allChannels = [];
+let allVoices   = [];
+let unlockedVoices = new Set(); // salas de voz que ya desbloqueamos
 
-function tryChannel(channel){
-  // general es abierto, kbros requiere clave
-  if(channel==='general'){ switchChannel('general'); return; }
-  // Abrir modal de clave
-  pendingChannel = channel;
-  document.getElementById('ch-modal-name').textContent='# '+channel;
-  document.getElementById('ch-pass-input').value='';
-  document.getElementById('ch-pass-error').classList.remove('show');
-  document.getElementById('ch-modal').classList.add('open');
-  setTimeout(()=>document.getElementById('ch-pass-input').focus(),100);
+socket.on('rooms-info', ({ channels, voices }) => {
+  allChannels = channels;
+  allVoices   = voices;
+  renderTextChannels();
+  renderVoiceChannels();
+});
+
+function renderTextChannels() {
+  const el = document.getElementById('text-channels-list');
+  if (!el) return;
+  el.innerHTML = allChannels.map(ch => `
+    <div class="ch-item ${myChannel===ch.id?'active':''}" id="ch-${ch.id}" onclick="tryChannel('${ch.id}')">
+      <span class="ch-sym">${ch.locked?'🔒':'#'}</span> ${ch.id}
+    </div>`).join('');
 }
 
-function closeChanModal(){ document.getElementById('ch-modal').classList.remove('open'); pendingChannel=null; }
+function renderVoiceChannels() {
+  const el = document.getElementById('voice-channels-list');
+  if (!el) return;
+  el.innerHTML = allVoices.map(v => `
+    <div class="voice-room" id="vr-${v.id}">
+      <div class="voice-room-head" onclick="tryVoiceRoom('${v.id}')">
+        <span>${v.locked && !unlockedVoices.has(v.id) ? '🔒' : '◈'}</span>
+        <span>${v.label}</span>
+        ${inVoice && currentVoiceRoom===v.id ? '<span style="color:var(--green);margin-left:auto;font-size:.65rem;">● EN VIVO</span>' : ''}
+      </div>
+      <div class="voice-peers" id="vp-${v.id}"><span style="font-size:.7rem;color:var(--muted);font-style:italic">vacía</span></div>
+    </div>`).join('');
+}
 
-document.getElementById('ch-pass-input').addEventListener('keydown',e=>e.key==='Enter'&&submitChanPass());
+// ── CANALES DE TEXTO ─────────────────────────────────────
+let pendingChannel = null;
 
-async function submitChanPass(){
+function tryChannel(channel) {
+  const ch = allChannels.find(c => c.id === channel);
+  if (!ch) return;
+  if (!ch.locked) { switchChannel(channel); return; }
+  pendingChannel = channel;
+  document.getElementById('ch-modal-name').textContent = '# ' + channel;
+  document.getElementById('ch-pass-input').value = '';
+  document.getElementById('ch-pass-error').classList.remove('show');
+  document.getElementById('ch-modal').classList.add('open');
+  setTimeout(() => document.getElementById('ch-pass-input').focus(), 100);
+}
+
+function closeChanModal() { document.getElementById('ch-modal').classList.remove('open'); pendingChannel = null; }
+document.getElementById('ch-pass-input').addEventListener('keydown', e => e.key === 'Enter' && submitChanPass());
+
+async function submitChanPass() {
   const password = document.getElementById('ch-pass-input').value;
   const errEl = document.getElementById('ch-pass-error');
   errEl.classList.remove('show');
-
-  const res = await fetch('/api/channel-join',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({channel:pendingChannel,password})});
+  const res = await fetch('/api/channel-join', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ channel: pendingChannel, password }) });
   const data = await res.json();
-
-  if(!data.ok){ errEl.textContent=data.error; errEl.classList.add('show'); return; }
-  const ch = pendingChannel;
-  closeChanModal();
-  switchChannel(ch);
+  if (!data.ok) { errEl.textContent = data.error; errEl.classList.add('show'); return; }
+  const ch = pendingChannel; closeChanModal(); switchChannel(ch);
 }
 
-function switchChannel(channel){
-  if(channel===myChannel) return;
-  myChannel=channel;
-  socket.emit('join-channel',{channel});
-
-  // Actualizar UI del sidebar
-  document.querySelectorAll('.ch-item').forEach(el=>el.classList.remove('active'));
-  const chEl=document.getElementById('ch-'+channel);
-  if(chEl) chEl.classList.add('active');
-
-  // Actualizar header del chat
-  document.getElementById('ch-header-sym').textContent = channel==='kbros' ? '🔒' : '#';
+function switchChannel(channel) {
+  if (channel === myChannel) return;
+  myChannel = channel;
+  socket.emit('join-channel', { channel });
+  renderTextChannels();
+  const sym = allChannels.find(c => c.id === channel)?.locked ? '🔒' : '#';
+  document.getElementById('ch-header-sym').textContent = sym;
   document.getElementById('ch-header-name').textContent = channel;
-  document.getElementById('topbar-ch').textContent = (channel==='kbros'?'🔒':'#')+' '+channel;
-
-  // Limpiar mensajes al cambiar canal
-  document.getElementById('messages').innerHTML='';
-
-  // Volver al chat si estaba en watch party
-  if(wpActive) leaveWatchPartyLocal();
-  showChat();
-  closeSidebar();
+  document.getElementById('topbar-ch').textContent = sym + ' ' + channel;
+  document.getElementById('messages').innerHTML = '';
+  if (wpActive) leaveWatchPartyLocal();
+  showChat(); closeSidebar();
 }
 
-socket.on('channel-joined',({channel})=>{
-  myChannel=channel;
+socket.on('channel-joined', ({ channel }) => {
+  myChannel = channel;
+  renderTextChannels();
+  // Si es el primer canal (al conectarse), actualizar topbar
+  const ch = allChannels.find(c => c.id === channel);
+  if (ch) {
+    const sym = ch.locked ? '🔒' : '#';
+    document.getElementById('topbar-ch').textContent = sym + ' ' + channel;
+    document.getElementById('ch-header-sym').textContent = sym;
+    document.getElementById('ch-header-name').textContent = channel;
+  }
+});
+
+// ── SALAS DE VOZ ─────────────────────────────────────────
+let currentVoiceRoom = null;
+let pendingVoiceRoom = null;
+
+function tryVoiceRoom(roomId) {
+  if (inVoice && currentVoiceRoom === roomId) { leaveVoice(); return; }
+  const vr = allVoices.find(v => v.id === roomId);
+  if (!vr) return;
+  if (!vr.locked || unlockedVoices.has(roomId)) { joinVoice(roomId); return; }
+  pendingVoiceRoom = roomId;
+  document.getElementById('voice-modal-name').textContent = '◈ ' + roomId;
+  document.getElementById('voice-pass-input').value = '';
+  document.getElementById('voice-pass-error').classList.remove('show');
+  document.getElementById('voice-modal').classList.add('open');
+  setTimeout(() => document.getElementById('voice-pass-input').focus(), 100);
+}
+
+function closeVoiceModal() { document.getElementById('voice-modal').classList.remove('open'); pendingVoiceRoom = null; }
+document.getElementById('voice-pass-input').addEventListener('keydown', e => e.key === 'Enter' && submitVoicePass());
+
+async function submitVoicePass() {
+  const password = document.getElementById('voice-pass-input').value;
+  const errEl = document.getElementById('voice-pass-error');
+  errEl.classList.remove('show');
+  const res = await fetch('/api/voice-join', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ room: pendingVoiceRoom, password }) });
+  const data = await res.json();
+  if (!data.ok) { errEl.textContent = data.error; errEl.classList.add('show'); return; }
+  const room = pendingVoiceRoom;
+  unlockedVoices.add(room);
+  closeVoiceModal();
+  joinVoice(room);
+}
+
+socket.on('voice-users', state => {
+  // state = { kbros: [{id,name},...], vcby: [...] }
+  Object.keys(state).forEach(roomId => {
+    const el = document.getElementById('vp-' + roomId);
+    if (!el) return;
+    const members = state[roomId];
+    el.innerHTML = members.length
+      ? members.map(u => `<div class="peer-row"><div class="peer-dot"></div>${esc(u.name)}</div>`).join('')
+      : `<span style="font-size:.7rem;color:var(--muted);font-style:italic">vacía</span>`;
+  });
+  renderVoiceChannels(); // re-render to update live badge
 });
 
 function updateTopbarAvatar(){
@@ -865,7 +953,11 @@ function isMobile(){ return window.innerWidth <= 768; }
 function showChat(){
   document.getElementById('chat-view').style.display='flex';
   document.getElementById('watch-view').classList.remove('active');
-  document.getElementById('topbar-ch').textContent='# general';
+  if(myChannel){
+    const ch=allChannels.find(c=>c.id===myChannel);
+    const sym=ch?.locked?'🔒':'#';
+    document.getElementById('topbar-ch').textContent=sym+' '+myChannel;
+  }
   document.getElementById('watch-party-btn').classList.remove('live');
   document.getElementById('watch-party-btn').innerHTML='🎬 Watch Party';
   closeSidebar();
@@ -1138,66 +1230,192 @@ socket.on('user-list', users => {
   const mv=document.getElementById('mob-viewers'); if(mv) mv.textContent=`${count} persona${count!==1?'s':''} viendo`;
 });
 
-// ── MÚSICA ────────────────────────────────────────────────
-socket.on('music-play',song=>{
-  document.getElementById('music-player').classList.add('active');
-  document.getElementById('music-title').textContent=song.title;
-  document.getElementById('music-req').textContent=`pedida por ${song.requestedBy}`;
-  document.getElementById('music-thumb').src=song.thumbnail;
-  document.getElementById('progress-fill').style.width='0%';
-  document.getElementById('pause-btn').textContent='⏸';
-  if(ytReady&&ytPlayer){ytPlayer.loadVideoById(song.videoId);ytPlayer.playVideo();}
+// ── MÚSICA EN SEGUNDO PLANO ───────────────────────────────
+// Solución: usar un <audio> nativo con src de YouTube embed
+// Los navegadores móviles respetan audio nativo aunque la app esté en background
+// Creamos un audio invisible que carga el video de YouTube como stream de audio
+
+let bgAudio = null;          // <audio> nativo para reproducción en background
+let currentSongId = null;
+
+function getBgAudio() {
+  if (!bgAudio) {
+    bgAudio = document.createElement('audio');
+    bgAudio.id = 'bg-music-audio';
+    bgAudio.preload = 'none';
+    // Necesario en iOS para reproducir sin interacción adicional
+    bgAudio.setAttribute('playsinline', '');
+    bgAudio.setAttribute('webkit-playsinline', '');
+    document.body.appendChild(bgAudio);
+  }
+  return bgAudio;
+}
+
+// Cargar canción usando YouTube IFrame como fuente de audio + MediaSession API
+function loadSongBackground(song) {
+  currentSongId = song.videoId;
+
+  // 1. YT IFrame para reproducción principal (funciona en desktop y Android Chrome)
+  if (ytReady && ytPlayer) {
+    ytPlayer.loadVideoById(song.videoId);
+    ytPlayer.playVideo();
+  }
+
+  // 2. MediaSession API — controles de media en pantalla de bloqueo y notificaciones
+  if ('mediaSession' in navigator) {
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title:  song.title,
+      artist: `Pedida por ${song.requestedBy}`,
+      album:  'Diskold',
+      artwork: [{ src: song.thumbnail, sizes: '480x360', type: 'image/jpeg' }],
+    });
+    navigator.mediaSession.setActionHandler('pause',         () => socket.emit('bot-command', { command: '/pause' }));
+    navigator.mediaSession.setActionHandler('play',          () => socket.emit('bot-command', { command: '/resume' }));
+    navigator.mediaSession.setActionHandler('nexttrack',     () => socket.emit('bot-command', { command: '/skip' }));
+    navigator.mediaSession.setActionHandler('previoustrack', null);
+  }
+
+  // 3. Silent audio trick: reproducir un audio silencioso nativo para que el navegador
+  //    mantenga el contexto de audio activo en segundo plano (iOS/Android restriction bypass)
+  const a = getBgAudio();
+  // src de un mp3 silencioso en base64 de 1 segundo — mantiene el audio context vivo
+  if (!a.src || a.paused) {
+    a.src = 'data:audio/mpeg;base64,SUQzBAAAAAABEVRYWFgAAAAtAAADY29tbWVudABCaWdTb3VuZEJhbmsgU291bmQgRWZmZWN0cwBUWFhYAAAAIQAAA1NvZnR3YXJlAExhdmY1OC4yOS4xMDAAAAAAAAAAAAAAAP/7kGQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABIADMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzM/////wAAAABMYXZjNTguNTQAAAAAAAAAAAAAAAAkAkAAAAAAAAABIKVWHgAAAAAAAAAAAAAAAAD/+5BkAAADgALQAAAAAAAANgAAAAAAAAAAAAAAgAAA/wAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/+5BkBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+    a.loop = true;
+    a.volume = 0.001; // prácticamente silencioso
+    a.play().catch(() => {});
+  }
+}
+
+function stopBgAudio() {
+  if (bgAudio) { bgAudio.pause(); bgAudio.src = ''; }
+  if ('mediaSession' in navigator) navigator.mediaSession.metadata = null;
+  currentSongId = null;
+}
+
+// Cuando la pantalla se vuelve visible de nuevo, asegurarse que YT siga
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && currentSongId && ytReady && ytPlayer) {
+    try {
+      const state = ytPlayer.getPlayerState();
+      // Si se pausó automáticamente al ir al background, reanudar
+      if (state === YT.PlayerState.PAUSED || state === YT.PlayerState.BUFFERING) {
+        ytPlayer.playVideo();
+      }
+    } catch(e) {}
+  }
 });
-socket.on('music-state',s=>{ if(s.current){document.getElementById('music-player').classList.add('active');document.getElementById('music-title').textContent=s.current.title;document.getElementById('music-req').textContent=`pedida por ${s.current.requestedBy}`;document.getElementById('music-thumb').src=s.current.thumbnail;} document.getElementById('vol-slider').value=s.volume; if(ytPlayer&&ytPlayer.setVolume)ytPlayer.setVolume(s.volume); });
-socket.on('music-stop',()=>{document.getElementById('music-player').classList.remove('active');clearInterval(progressInterval);if(ytPlayer&&ytPlayer.stopVideo)ytPlayer.stopVideo();});
-socket.on('music-ended',()=>{document.getElementById('music-player').classList.remove('active');clearInterval(progressInterval);});
-socket.on('music-pause',()=>{document.getElementById('pause-btn').textContent='▶';if(ytPlayer&&ytPlayer.pauseVideo)ytPlayer.pauseVideo();});
-socket.on('music-resume',()=>{document.getElementById('pause-btn').textContent='⏸';if(ytPlayer&&ytPlayer.playVideo)ytPlayer.playVideo();});
-socket.on('music-volume',v=>{document.getElementById('vol-slider').value=v;if(ytPlayer&&ytPlayer.setVolume)ytPlayer.setVolume(v);});
 
-function togglePause(){socket.emit('bot-command',{command:document.getElementById('pause-btn').textContent==='⏸'?'/pause':'/resume'});}
-function skipSong(){socket.emit('bot-command',{command:'/skip'});}
-function stopMusic(){socket.emit('bot-command',{command:'/stop'});}
-function setVolume(v){socket.emit('bot-command',{command:`/volume ${v}`});if(ytPlayer&&ytPlayer.setVolume)ytPlayer.setVolume(parseInt(v));}
+socket.on('music-play', song => {
+  document.getElementById('music-player').classList.add('active');
+  document.getElementById('music-title').textContent  = song.title;
+  document.getElementById('music-req').textContent    = `pedida por ${song.requestedBy}`;
+  document.getElementById('music-thumb').src          = song.thumbnail;
+  document.getElementById('progress-fill').style.width = '0%';
+  document.getElementById('pause-btn').textContent    = '⏸';
+  loadSongBackground(song);
+});
 
-// ── VOICE ─────────────────────────────────────────────────
-const ICE={iceServers:[{urls:'stun:stun.l.google.com:19302'}]};
-async function toggleVoice(){inVoice?leaveVoice():await joinVoice();}
-async function joinVoice(){
-  try{localStream=await navigator.mediaDevices.getUserMedia({audio:true,video:false});}
-  catch(e){alert('No se pudo acceder al micrófono.');return;}
-  inVoice=true;
-  document.getElementById('voice-btn').classList.add('on');
+socket.on('music-state', s => {
+  if (s.current) {
+    document.getElementById('music-player').classList.add('active');
+    document.getElementById('music-title').textContent = s.current.title;
+    document.getElementById('music-req').textContent   = `pedida por ${s.current.requestedBy}`;
+    document.getElementById('music-thumb').src         = s.current.thumbnail;
+    if (currentSongId !== s.current.videoId) loadSongBackground(s.current);
+  }
+  document.getElementById('vol-slider').value = s.volume;
+  if (ytPlayer && ytPlayer.setVolume) ytPlayer.setVolume(s.volume);
+});
+
+socket.on('music-stop', () => {
+  document.getElementById('music-player').classList.remove('active');
+  clearInterval(progressInterval);
+  if (ytPlayer && ytPlayer.stopVideo) ytPlayer.stopVideo();
+  stopBgAudio();
+});
+
+socket.on('music-ended', () => {
+  document.getElementById('music-player').classList.remove('active');
+  clearInterval(progressInterval);
+  stopBgAudio();
+});
+
+socket.on('music-pause', () => {
+  document.getElementById('pause-btn').textContent = '▶';
+  if (ytPlayer && ytPlayer.pauseVideo) ytPlayer.pauseVideo();
+});
+
+socket.on('music-resume', () => {
+  document.getElementById('pause-btn').textContent = '⏸';
+  if (ytPlayer && ytPlayer.playVideo) ytPlayer.playVideo();
+});
+
+socket.on('music-volume', v => {
+  document.getElementById('vol-slider').value = v;
+  if (ytPlayer && ytPlayer.setVolume) ytPlayer.setVolume(v);
+});
+
+function togglePause() { socket.emit('bot-command', { command: document.getElementById('pause-btn').textContent === '⏸' ? '/pause' : '/resume' }); }
+function skipSong()    { socket.emit('bot-command', { command: '/skip' }); }
+function stopMusic()   { socket.emit('bot-command', { command: '/stop' }); }
+function setVolume(v)  { socket.emit('bot-command', { command: `/volume ${v}` }); if (ytPlayer && ytPlayer.setVolume) ytPlayer.setVolume(parseInt(v)); }
+
+// ── VOZ (WebRTC) ──────────────────────────────────────────
+const ICE = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+
+async function joinVoice(roomId) {
+  if (inVoice) leaveVoice(); // salir de sala anterior si había
+  try { localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false }); }
+  catch(e) { alert('No se pudo acceder al micrófono.'); return; }
+  inVoice = true;
+  currentVoiceRoom = roomId;
   document.getElementById('call-status').classList.add('on');
-  socket.emit('join-voice','general');
+  document.getElementById('call-room-label').textContent = roomId;
+  document.getElementById('voice-leave-btn').style.display = 'flex';
+  socket.emit('join-voice', roomId);
+  renderVoiceChannels();
 }
-function leaveVoice(){
-  inVoice=false;
-  if(localStream){localStream.getTracks().forEach(t=>t.stop());localStream=null;}
-  Object.values(peers).forEach(pc=>pc.close());Object.keys(peers).forEach(k=>delete peers[k]);
-  document.getElementById('remote-audios').innerHTML='';
-  document.getElementById('voice-btn').classList.remove('on');
+
+function leaveVoice() {
+  inVoice = false;
+  currentVoiceRoom = null;
+  if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+  Object.values(peers).forEach(pc => pc.close());
+  Object.keys(peers).forEach(k => delete peers[k]);
+  document.getElementById('remote-audios').innerHTML = '';
   document.getElementById('call-status').classList.remove('on');
+  document.getElementById('voice-leave-btn').style.display = 'none';
   socket.emit('leave-voice');
+  renderVoiceChannels();
 }
-function toggleMic(){
-  if(!localStream)return; micMuted=!micMuted;
-  localStream.getAudioTracks().forEach(t=>t.enabled=!micMuted);
-  const b=document.getElementById('mic-btn'); b.classList.toggle('off',micMuted); b.textContent=micMuted?'🔇':'🎤';
+
+function toggleMic() {
+  if (!localStream) return;
+  micMuted = !micMuted;
+  localStream.getAudioTracks().forEach(t => t.enabled = !micMuted);
+  const b = document.getElementById('mic-btn');
+  b.classList.toggle('off', micMuted);
+  b.textContent = micMuted ? '🔇' : '🎤';
 }
-socket.on('voice-users',({users})=>{const el=document.getElementById('voice-peers');el.innerHTML=users.length?users.map(u=>`<div class="peer-row"><div class="peer-dot"></div>${esc(u.name)}</div>`).join(''):`<span style="font-size:.7rem;color:var(--muted);font-style:italic">vacía</span>`;});
-socket.on('existing-peers',async ids=>{for(const id of ids)await createPC(id,true);});
-socket.on('peer-joined',async({peerId})=>await createPC(peerId,false));
-socket.on('peer-left',id=>{if(peers[id]){peers[id].close();delete peers[id];}const a=document.getElementById('aud-'+id);if(a)a.remove();});
-socket.on('offer',async({from,offer})=>{if(!peers[from])await createPC(from,false);await peers[from].setRemoteDescription(new RTCSessionDescription(offer));const ans=await peers[from].createAnswer();await peers[from].setLocalDescription(ans);socket.emit('answer',{to:from,answer:ans});});
-socket.on('answer',async({from,answer})=>{if(peers[from])await peers[from].setRemoteDescription(new RTCSessionDescription(answer));});
-socket.on('ice-candidate',async({from,candidate})=>{if(peers[from]&&candidate)try{await peers[from].addIceCandidate(new RTCIceCandidate(candidate));}catch(e){}});
-async function createPC(peerId,init){
-  const pc=new RTCPeerConnection(ICE);peers[peerId]=pc;
-  if(localStream)localStream.getTracks().forEach(t=>pc.addTrack(t,localStream));
-  pc.onicecandidate=({candidate})=>candidate&&socket.emit('ice-candidate',{to:peerId,candidate});
-  pc.ontrack=e=>{let a=document.getElementById('aud-'+peerId);if(!a){a=document.createElement('audio');a.id='aud-'+peerId;a.autoplay=true;document.getElementById('remote-audios').appendChild(a);}a.srcObject=e.streams[0];};
-  if(init){const offer=await pc.createOffer();await pc.setLocalDescription(offer);socket.emit('offer',{to:peerId,offer});}
+
+socket.on('existing-peers', async ids => { for (const id of ids) await createPC(id, true); });
+socket.on('peer-joined', async ({ peerId }) => await createPC(peerId, false));
+socket.on('peer-left', id => { if (peers[id]) { peers[id].close(); delete peers[id]; } const a = document.getElementById('aud-' + id); if (a) a.remove(); });
+socket.on('offer', async ({ from, offer }) => { if (!peers[from]) await createPC(from, false); await peers[from].setRemoteDescription(new RTCSessionDescription(offer)); const ans = await peers[from].createAnswer(); await peers[from].setLocalDescription(ans); socket.emit('answer', { to: from, answer: ans }); });
+socket.on('answer', async ({ from, answer }) => { if (peers[from]) await peers[from].setRemoteDescription(new RTCSessionDescription(answer)); });
+socket.on('ice-candidate', async ({ from, candidate }) => { if (peers[from] && candidate) try { await peers[from].addIceCandidate(new RTCIceCandidate(candidate)); } catch(e) {} });
+
+async function createPC(peerId, init) {
+  const pc = new RTCPeerConnection(ICE); peers[peerId] = pc;
+  if (localStream) localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+  pc.onicecandidate = ({ candidate }) => candidate && socket.emit('ice-candidate', { to: peerId, candidate });
+  pc.ontrack = e => {
+    let a = document.getElementById('aud-' + peerId);
+    if (!a) { a = document.createElement('audio'); a.id = 'aud-' + peerId; a.autoplay = true; document.getElementById('remote-audios').appendChild(a); }
+    a.srcObject = e.streams[0];
+  };
+  if (init) { const offer = await pc.createOffer(); await pc.setLocalDescription(offer); socket.emit('offer', { to: peerId, offer }); }
   return pc;
 }
 </script>
