@@ -1,122 +1,180 @@
 /**
- * DISKOLD — Servidor Principal
+ * DISKOLD v2.0 — Servidor con Sistema de Cuentas
  * Creado por Kold
- * Chat en tiempo real + señalización WebRTC + Bot de música
  */
 
-const express = require('express');
-const http    = require('http');
+const express  = require('express');
+const http     = require('http');
 const { Server } = require('socket.io');
-const path    = require('path');
-const https   = require('https');
+const path     = require('path');
+const fs       = require('fs');
+const crypto   = require('crypto');
+const https    = require('https');
 
 const app    = express();
 const server = http.createServer(app);
 const io     = new Server(server, { cors: { origin: '*' } });
 
 app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.json({ limit: '5mb' })); // Para fotos de perfil en base64
 
-const users = {};
-const rooms = {};
+// ── Base de datos JSON ────────────────────────────────────
+const DB_PATH = path.join(__dirname, 'data', 'users.json');
 
-// ── Estado del bot de música ──────────────────────────────
-const musicBot = {
-  queue: [],        // { title, videoId, thumbnail, duration, requestedBy }
-  playing: false,
-  current: null,
-  volume: 80,
-  paused: false,
-};
-
-// ── API YouTube (sin key, usando scraping de oEmbed + search) ──
-async function searchYouTube(query) {
-  return new Promise((resolve, reject) => {
-    const q = encodeURIComponent(query);
-    const url = `https://www.youtube.com/results?search_query=${q}`;
-    
-    https.get(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-      }
-    }, (res) => {
-      let data = '';
-      res.on('data', chunk => data += chunk);
-      res.on('end', () => {
-        try {
-          // Extraer videoIds del HTML de resultados
-          const matches = data.match(/"videoId":"([a-zA-Z0-9_-]{11})"/g);
-          if (!matches || matches.length === 0) return resolve([]);
-          
-          // Sacar IDs únicos
-          const ids = [...new Set(matches.map(m => m.replace('"videoId":"', '').replace('"', '')))].slice(0, 5);
-          
-          // Extraer títulos
-          const titleMatches = data.match(/"title":{"runs":\[{"text":"([^"]+)"/g) || [];
-          const titles = titleMatches.map(t => {
-            const m = t.match(/"text":"([^"]+)"/);
-            return m ? m[1] : 'Sin título';
-          }).slice(0, 5);
-
-          const results = ids.map((id, i) => ({
-            videoId: id,
-            title: titles[i] || `Video ${i + 1}`,
-            thumbnail: `https://img.youtube.com/vi/${id}/mqdefault.jpg`,
-            url: `https://www.youtube.com/watch?v=${id}`
-          }));
-
-          resolve(results);
-        } catch(e) {
-          resolve([]);
-        }
-      });
-    }).on('error', reject);
-  });
+function readDB() {
+  try {
+    return JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
+  } catch(e) {
+    return { users: [] };
+  }
 }
 
-// ── Endpoint para buscar música ───────────────────────────
-app.get('/api/search', async (req, res) => {
-  const { q } = req.query;
-  if (!q) return res.json({ results: [] });
-  try {
-    const results = await searchYouTube(q);
-    res.json({ results });
-  } catch(e) {
-    res.json({ results: [] });
+function writeDB(data) {
+  fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
+}
+
+function hashPassword(password) {
+  return crypto.createHash('sha256').update(password + 'diskold_salt_kold').digest('hex');
+}
+
+function generateToken() {
+  return crypto.randomBytes(32).toString('hex');
+}
+
+// Sesiones activas en memoria: token → username
+const sessions = {};
+
+// ── AUTH ENDPOINTS ────────────────────────────────────────
+
+// Registrar cuenta
+app.post('/api/register', (req, res) => {
+  const { username, password, avatar } = req.body;
+
+  if (!username || !password) return res.json({ ok: false, error: 'Faltan datos.' });
+  if (username.length < 2 || username.length > 20) return res.json({ ok: false, error: 'Nombre: 2-20 caracteres.' });
+  if (password.length < 4) return res.json({ ok: false, error: 'Contraseña muy corta (mín. 4 caracteres).' });
+
+  const db = readDB();
+  const exists = db.users.find(u => u.username.toLowerCase() === username.toLowerCase());
+  if (exists) return res.json({ ok: false, error: 'Ese nombre de usuario ya existe.' });
+
+  const user = {
+    id: crypto.randomUUID(),
+    username,
+    password: hashPassword(password),
+    avatar: avatar || null, // base64 o null
+    createdAt: new Date().toISOString()
+  };
+
+  db.users.push(user);
+  writeDB(db);
+
+  const token = generateToken();
+  sessions[token] = { username: user.username, avatar: user.avatar, id: user.id };
+
+  res.json({ ok: true, token, username: user.username, avatar: user.avatar });
+});
+
+// Login
+app.post('/api/login', (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) return res.json({ ok: false, error: 'Faltan datos.' });
+
+  const db = readDB();
+  const user = db.users.find(u => u.username.toLowerCase() === username.toLowerCase());
+
+  if (!user) return res.json({ ok: false, error: 'Usuario no encontrado.' });
+  if (user.password !== hashPassword(password)) return res.json({ ok: false, error: 'Contraseña incorrecta.' });
+
+  const token = generateToken();
+  sessions[token] = { username: user.username, avatar: user.avatar, id: user.id };
+
+  res.json({ ok: true, token, username: user.username, avatar: user.avatar });
+});
+
+// Actualizar avatar
+app.post('/api/update-avatar', (req, res) => {
+  const { token, avatar } = req.body;
+  if (!token || !sessions[token]) return res.json({ ok: false, error: 'No autenticado.' });
+
+  const session = sessions[token];
+  const db = readDB();
+  const user = db.users.find(u => u.username === session.username);
+  if (!user) return res.json({ ok: false, error: 'Usuario no encontrado.' });
+
+  user.avatar = avatar;
+  writeDB(db);
+  sessions[token].avatar = avatar;
+
+  // Notificar a todos del nuevo avatar
+  io.emit('avatar-updated', { username: session.username, avatar });
+
+  res.json({ ok: true });
+});
+
+// Verificar token (para mantener sesión)
+app.post('/api/verify', (req, res) => {
+  const { token } = req.body;
+  if (token && sessions[token]) {
+    res.json({ ok: true, ...sessions[token] });
+  } else {
+    res.json({ ok: false });
   }
 });
 
-// ── Endpoint para obtener info de video ───────────────────
-app.get('/api/video/:id', (req, res) => {
-  const { id } = req.params;
-  https.get(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${id}&format=json`, (r) => {
-    let data = '';
-    r.on('data', c => data += c);
-    r.on('end', () => {
-      try { res.json(JSON.parse(data)); }
-      catch(e) { res.json({}); }
-    });
-  }).on('error', () => res.json({}));
+// ── Estado del bot de música ──────────────────────────────
+const musicBot = {
+  queue: [], playing: false, current: null, volume: 80, paused: false,
+};
+
+async function searchYouTube(query) {
+  return new Promise((resolve) => {
+    const q = encodeURIComponent(query);
+    https.get(`https://www.youtube.com/results?search_query=${q}`, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+    }, (res) => {
+      let data = '';
+      res.on('data', c => data += c);
+      res.on('end', () => {
+        try {
+          const ids = [...new Set((data.match(/"videoId":"([a-zA-Z0-9_-]{11})"/g)||[]).map(m=>m.slice(11,-1)))].slice(0,5);
+          const titles = (data.match(/"title":{"runs":\[{"text":"([^"]+)"/g)||[]).map(t=>{const m=t.match(/"text":"([^"]+)"/);return m?m[1]:'Sin título';}).slice(0,5);
+          resolve(ids.map((id,i)=>({ videoId:id, title:titles[i]||`Video ${i+1}`, thumbnail:`https://img.youtube.com/vi/${id}/mqdefault.jpg` })));
+        } catch(e) { resolve([]); }
+      });
+    }).on('error', ()=>resolve([]));
+  });
+}
+
+app.get('/api/search', async (req, res) => {
+  const results = await searchYouTube(req.query.q || '');
+  res.json({ results });
 });
 
-// ── Estado del bot (para nuevos usuarios) ─────────────────
-app.get('/api/music-state', (req, res) => {
-  res.json(musicBot);
-});
+app.get('/api/music-state', (req, res) => res.json(musicBot));
+
+// ── Socket.io ─────────────────────────────────────────────
+const users  = {}; // socketId → { username, avatar }
+const rooms  = {};
 
 io.on('connection', (socket) => {
 
-  socket.on('register', (username) => {
-    users[socket.id] = username;
+  // Login con token
+  socket.on('auth', (token) => {
+    const session = sessions[token];
+    if (!session) { socket.emit('auth-error', 'Sesión inválida.'); return; }
+
+    users[socket.id] = { username: session.username, avatar: session.avatar };
     io.emit('user-list', buildUserList());
-    broadcast_system(`${username} entró a Diskold`);
-    // Enviar estado actual del bot al nuevo usuario
+    broadcast_system(`${session.username} entró a Diskold`);
+    socket.emit('auth-ok', session);
     socket.emit('music-state', musicBot);
   });
 
   socket.on('chat-message', (text) => {
-    const username = users[socket.id] || 'Anónimo';
-    
-    // ── Detectar comandos del bot ──────────────────────────
+    if (!users[socket.id]) return;
+    const { username, avatar } = users[socket.id];
+
     if (text.startsWith('/')) {
       handleBotCommand(socket, username, text);
       return;
@@ -124,24 +182,24 @@ io.on('connection', (socket) => {
 
     io.emit('chat-message', {
       user: username,
+      avatar,
       text,
       time: now()
     });
   });
 
-  // ── Comandos del bot vía socket ───────────────────────────
   socket.on('bot-command', (data) => {
-    handleBotCommand(socket, users[socket.id] || 'Anónimo', data.command);
+    if (!users[socket.id]) return;
+    handleBotCommand(socket, users[socket.id].username, data.command);
   });
 
-  // ── WebRTC ────────────────────────────────────────────────
+  // WebRTC
   socket.on('join-voice', (roomId) => {
+    if (!users[socket.id]) return;
     if (!rooms[roomId]) rooms[roomId] = [];
     const peers = rooms[roomId].filter(id => id !== socket.id);
     socket.emit('existing-peers', peers);
-    peers.forEach(peerId => {
-      io.to(peerId).emit('peer-joined', { peerId: socket.id, username: users[socket.id] });
-    });
+    peers.forEach(p => io.to(p).emit('peer-joined', { peerId: socket.id, username: users[socket.id].username }));
     rooms[roomId].push(socket.id);
     socket.join(roomId);
     socket.currentRoom = roomId;
@@ -149,219 +207,83 @@ io.on('connection', (socket) => {
   });
 
   socket.on('leave-voice', () => leaveVoice(socket));
-
-  socket.on('offer',         ({ to, offer })     => io.to(to).emit('offer',         { from: socket.id, offer }));
-  socket.on('answer',        ({ to, answer })    => io.to(to).emit('answer',        { from: socket.id, answer }));
-  socket.on('ice-candidate', ({ to, candidate }) => io.to(to).emit('ice-candidate', { from: socket.id, candidate }));
+  socket.on('offer',         ({to,offer})     => io.to(to).emit('offer',         {from:socket.id,offer}));
+  socket.on('answer',        ({to,answer})    => io.to(to).emit('answer',        {from:socket.id,answer}));
+  socket.on('ice-candidate', ({to,candidate}) => io.to(to).emit('ice-candidate', {from:socket.id,candidate}));
 
   socket.on('disconnect', () => {
-    const name = users[socket.id];
-    if (name) broadcast_system(`${name} salió de Diskold`);
+    const u = users[socket.id];
+    if (u) broadcast_system(`${u.username} salió de Diskold`);
     leaveVoice(socket);
     delete users[socket.id];
     io.emit('user-list', buildUserList());
   });
 
-  // ── Helpers ───────────────────────────────────────────────
-  function leaveVoice(socket) {
-    if (!socket.currentRoom || !rooms[socket.currentRoom]) return;
-    rooms[socket.currentRoom] = rooms[socket.currentRoom].filter(id => id !== socket.id);
-    io.to(socket.currentRoom).emit('peer-left', socket.id);
-    emitVoiceUsers(socket.currentRoom);
-    socket.leave(socket.currentRoom);
-    socket.currentRoom = null;
+  function leaveVoice(s) {
+    if (!s.currentRoom || !rooms[s.currentRoom]) return;
+    rooms[s.currentRoom] = rooms[s.currentRoom].filter(id => id !== s.id);
+    io.to(s.currentRoom).emit('peer-left', s.id);
+    emitVoiceUsers(s.currentRoom);
+    s.leave(s.currentRoom);
+    s.currentRoom = null;
   }
 
   function emitVoiceUsers(roomId) {
     io.emit('voice-users', {
       roomId,
-      users: (rooms[roomId] || []).map(id => ({ id, name: users[id] || 'Anónimo' }))
+      users: (rooms[roomId]||[]).map(id => ({ id, name: users[id]?.username || 'Anónimo' }))
     });
   }
 });
 
-// ── Manejo de comandos del bot ────────────────────────────
+// ── Bot de música ─────────────────────────────────────────
 async function handleBotCommand(socket, username, text) {
   const parts = text.trim().split(' ');
   const cmd = parts[0].toLowerCase();
   const args = parts.slice(1).join(' ');
 
-  // Mostrar el comando en el chat
-  io.emit('chat-message', {
-    user: username,
-    text,
-    time: now()
-  });
+  io.emit('chat-message', { user: username, avatar: users[socket.id]?.avatar, text, time: now() });
 
   switch(cmd) {
     case '/play': {
-      if (!args) {
-        botMsg('❄️ Uso: `/play nombre de la canción`');
-        return;
-      }
+      if (!args) { botMsg('❄️ Uso: `/play nombre de la canción`'); return; }
       botMsg(`🔍 Buscando **${args}**...`);
-      try {
-        const results = await searchYouTube(args);
-        if (!results.length) {
-          botMsg('❌ No encontré resultados. Intenta con otro nombre.');
-          return;
-        }
-        const song = results[0];
-        song.requestedBy = username;
-        musicBot.queue.push(song);
-        
-        if (!musicBot.playing) {
-          playNext();
-        } else {
-          botMsg(`✅ **${song.title}** agregada a la cola (posición ${musicBot.queue.length})`);
-          io.emit('music-state', musicBot);
-        }
-      } catch(e) {
-        botMsg('❌ Error al buscar. Intenta de nuevo.');
-      }
+      const results = await searchYouTube(args);
+      if (!results.length) { botMsg('❌ No encontré resultados.'); return; }
+      const song = { ...results[0], requestedBy: username };
+      musicBot.queue.push(song);
+      if (!musicBot.playing) playNext();
+      else { botMsg(`✅ **${song.title}** en cola (#${musicBot.queue.length})`); io.emit('music-state', musicBot); }
       break;
     }
-
-    case '/skip': {
-      if (!musicBot.current) {
-        botMsg('❌ No hay nada reproduciéndose.');
-        return;
-      }
-      botMsg(`⏭️ **${username}** saltó la canción.`);
-      playNext();
-      break;
-    }
-
-    case '/stop': {
-      musicBot.queue = [];
-      musicBot.playing = false;
-      musicBot.current = null;
-      musicBot.paused = false;
-      io.emit('music-state', musicBot);
-      io.emit('music-stop');
-      botMsg('⏹️ Música detenida y cola limpiada.');
-      break;
-    }
-
-    case '/queue': {
-      if (!musicBot.current && !musicBot.queue.length) {
-        botMsg('📋 La cola está vacía. Usa `/play canción` para agregar música.');
-        return;
-      }
-      let msg = '📋 **Cola de reproducción:**\n';
-      if (musicBot.current) msg += `▶️ **Ahora:** ${musicBot.current.title} — pedida por ${musicBot.current.requestedBy}\n`;
-      musicBot.queue.forEach((s, i) => {
-        msg += `${i+1}. ${s.title} — pedida por ${s.requestedBy}\n`;
-      });
-      botMsg(msg);
-      break;
-    }
-
-    case '/pause': {
-      if (!musicBot.playing) { botMsg('❌ No hay música reproduciéndose.'); return; }
-      musicBot.paused = true;
-      io.emit('music-state', musicBot);
-      io.emit('music-pause');
-      botMsg('⏸️ Música pausada. Usa `/resume` para continuar.');
-      break;
-    }
-
-    case '/resume': {
-      if (!musicBot.paused) { botMsg('❌ La música no está pausada.'); return; }
-      musicBot.paused = false;
-      io.emit('music-state', musicBot);
-      io.emit('music-resume');
-      botMsg('▶️ Música reanudada.');
-      break;
-    }
-
-    case '/volume': {
-      const vol = parseInt(args);
-      if (isNaN(vol) || vol < 0 || vol > 100) {
-        botMsg('❌ Uso: `/volume 0-100`');
-        return;
-      }
-      musicBot.volume = vol;
-      io.emit('music-state', musicBot);
-      io.emit('music-volume', vol);
-      botMsg(`🔊 Volumen ajustado a **${vol}%**`);
-      break;
-    }
-
-    case '/nowplaying':
-    case '/np': {
-      if (!musicBot.current) {
-        botMsg('❌ No hay nada reproduciéndose ahora.');
-        return;
-      }
-      botMsg(`🎵 **Ahora suena:** ${musicBot.current.title}\n👤 Pedida por: ${musicBot.current.requestedBy}`);
-      break;
-    }
-
-    case '/help': {
-      botMsg(
-        '🤖 **Comandos de KoldBot:**\n' +
-        '`/play [canción]` — Busca y reproduce\n' +
-        '`/skip` — Salta la canción actual\n' +
-        '`/stop` — Detiene y limpia la cola\n' +
-        '`/pause` — Pausa la música\n' +
-        '`/resume` — Reanuda la música\n' +
-        '`/volume [0-100]` — Ajusta el volumen\n' +
-        '`/queue` — Ver la cola\n' +
-        '`/np` — Ver qué suena ahora\n' +
-        '`/help` — Ver esta ayuda'
-      );
-      break;
-    }
-
-    default: {
-      botMsg(`❓ Comando desconocido. Usa \`/help\` para ver los comandos.`);
-    }
+    case '/skip':  { if(!musicBot.current){botMsg('❌ No hay nada reproduciéndose.');return;} botMsg(`⏭️ **${username}** saltó la canción.`); playNext(); break; }
+    case '/stop':  { musicBot.queue=[];musicBot.playing=false;musicBot.current=null;musicBot.paused=false; io.emit('music-state',musicBot); io.emit('music-stop'); botMsg('⏹️ Música detenida.'); break; }
+    case '/pause': { if(!musicBot.playing){botMsg('❌ No hay música.');return;} musicBot.paused=true; io.emit('music-state',musicBot); io.emit('music-pause'); botMsg('⏸️ Pausada.'); break; }
+    case '/resume':{ if(!musicBot.paused){botMsg('❌ No está pausada.');return;} musicBot.paused=false; io.emit('music-state',musicBot); io.emit('music-resume'); botMsg('▶️ Reanudada.'); break; }
+    case '/volume':{ const v=parseInt(args); if(isNaN(v)||v<0||v>100){botMsg('❌ Uso: `/volume 0-100`');return;} musicBot.volume=v; io.emit('music-state',musicBot); io.emit('music-volume',v); botMsg(`🔊 Volumen: **${v}%**`); break; }
+    case '/queue': { if(!musicBot.current&&!musicBot.queue.length){botMsg('📋 Cola vacía.');return;} let msg='📋 **Cola:**\n'; if(musicBot.current)msg+=`▶️ ${musicBot.current.title} (${musicBot.current.requestedBy})\n`; musicBot.queue.forEach((s,i)=>msg+=`${i+1}. ${s.title}\n`); botMsg(msg); break; }
+    case '/np':    { if(!musicBot.current){botMsg('❌ Nada sonando.');return;} botMsg(`🎵 **${musicBot.current.title}** — por ${musicBot.current.requestedBy}`); break; }
+    case '/help':  { botMsg('🤖 **KoldBot:**\n`/play [canción]` `/skip` `/stop` `/pause` `/resume` `/volume [0-100]` `/queue` `/np`'); break; }
+    default:       { botMsg(`❓ Comando desconocido. Usa \`/help\`.`); }
   }
 }
 
 function playNext() {
-  if (musicBot.queue.length === 0) {
-    musicBot.playing = false;
-    musicBot.current = null;
-    io.emit('music-state', musicBot);
-    io.emit('music-ended');
-    botMsg('✅ Cola terminada. Usa `/play` para más música.');
-    return;
-  }
-  musicBot.current = musicBot.queue.shift();
-  musicBot.playing = true;
-  musicBot.paused = false;
-  io.emit('music-state', musicBot);
-  io.emit('music-play', musicBot.current);
-  botMsg(`🎵 **Ahora suena:** ${musicBot.current.title} — pedida por ${musicBot.current.requestedBy}`);
+  if (!musicBot.queue.length) { musicBot.playing=false; musicBot.current=null; io.emit('music-state',musicBot); io.emit('music-ended'); botMsg('✅ Cola terminada.'); return; }
+  musicBot.current=musicBot.queue.shift(); musicBot.playing=true; musicBot.paused=false;
+  io.emit('music-state',musicBot); io.emit('music-play',musicBot.current);
+  botMsg(`🎵 **${musicBot.current.title}** — por ${musicBot.current.requestedBy}`);
 }
 
-function botMsg(text) {
-  io.emit('chat-message', {
-    bot: true,
-    user: '🤖 KoldBot',
-    text,
-    time: now()
-  });
-}
-
-function now() {
-  return new Date().toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' });
-}
-
-function buildUserList() {
-  return Object.entries(users).map(([id, name]) => ({ id, name }));
-}
-
-function broadcast_system(text) {
-  io.emit('chat-message', { system: true, text, time: now() });
-}
+function botMsg(text) { io.emit('chat-message',{bot:true,user:'🤖 KoldBot',text,time:now()}); }
+function now() { return new Date().toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'}); }
+function buildUserList() { return Object.entries(users).map(([id,u])=>({id,name:u.username,avatar:u.avatar})); }
+function broadcast_system(text) { io.emit('chat-message',{system:true,text,time:now()}); }
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`\n╔══════════════════════════════════╗`);
-  console.log(`║  DISKOLD  —  by Kold              ║`);
+  console.log(`║  DISKOLD v2.0  —  by Kold         ║`);
   console.log(`║  http://localhost:${PORT}            ║`);
   console.log(`╚══════════════════════════════════╝\n`);
 });

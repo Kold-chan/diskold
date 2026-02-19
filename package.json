@@ -1,7 +1,7 @@
 {
   "name": "diskold",
-  "version": "1.1.0",
-  "description": "Diskold — Chat, voz y música en tiempo real. Creado por Kold.",
+  "version": "2.0.0",
+  "description": "Diskold — Chat, voz, música y cuentas. Creado por Kold.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
