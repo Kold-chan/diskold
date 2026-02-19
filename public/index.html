@@ -452,8 +452,9 @@
     <div class="sidebar-overlay" id="sb-overlay" onclick="closeSidebar()"></div>
     <div class="sidebar" id="sidebar">
       <div class="sidebar-section">
-        <div class="section-label">Texto</div>
-        <div class="ch-item active" onclick="showChat()"><span class="ch-sym">#</span> general</div>
+        <div class="section-label">Canales</div>
+        <div class="ch-item active" id="ch-general" onclick="switchChannel('general')"><span class="ch-sym">#</span> general</div>
+        <div class="ch-item" id="ch-kbros" onclick="tryChannel('kbros')"><span class="ch-sym">🔒</span> kbros</div>
       </div>
       <div class="sidebar-section">
         <div class="section-label">Voz</div>
@@ -481,9 +482,9 @@
       <!-- CHAT VIEW -->
       <div class="chat-view" id="chat-view">
         <div class="chat-header">
-          <span style="font-family:'Space Mono',monospace;color:var(--icedim);">#</span>
-          <span style="font-weight:700;font-size:.93rem;">general</span>
-          <span style="font-size:.73rem;color:var(--muted);margin-left:2px;">— /help para comandos · /watch [URL] para Watch Party</span>
+          <span style="font-family:'Space Mono',monospace;color:var(--icedim);" id="ch-header-sym">#</span>
+          <span style="font-weight:700;font-size:.93rem;" id="ch-header-name">general</span>
+          <span style="font-size:.73rem;color:var(--muted);margin-left:2px;">— /help · /watch [URL]</span>
         </div>
         <div class="messages" id="messages"></div>
         <div class="music-player" id="music-player">
@@ -606,6 +607,23 @@
   </div>
 </div>
 
+<!-- CHANNEL PASSWORD MODAL -->
+<div class="modal-overlay" id="ch-modal" onclick="if(event.target===this)closeChanModal()">
+  <div class="modal">
+    <div class="modal-title" style="color:var(--gold);">🔒 CANAL PRIVADO</div>
+    <div class="modal-sub" id="ch-modal-name" style="color:var(--muted);font-family:'Space Mono',monospace;font-size:.8rem;"></div>
+    <div class="auth-field" style="gap:6px;">
+      <label class="auth-label">Clave de acceso</label>
+      <input class="modal-input" id="ch-pass-input" type="password" placeholder="Ingresa la clave..."/>
+    </div>
+    <div class="auth-error" id="ch-pass-error"></div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeChanModal()">Cancelar</button>
+      <button class="btn-purple" style="background:var(--gold);color:#000;" onclick="submitChanPass()">ENTRAR</button>
+    </div>
+  </div>
+</div>
+
 <!-- PROFILE MODAL -->
 <div class="modal-overlay" id="profile-modal" onclick="if(event.target===this)closeProfile()">
   <div class="modal">
@@ -617,9 +635,9 @@
     <input type="file" id="profile-file" accept="image/*" style="display:none"/>
     <div class="modal-block">
       <div class="modal-row"><span class="modal-key">USUARIO</span><span class="modal-val ice" id="profile-username"></span></div>
-      <div class="modal-row"><span class="modal-key">VERSIÓN</span><span class="modal-val">Diskold v3.0.0</span></div>
+      <div class="modal-row"><span class="modal-key">VERSIÓN</span><span class="modal-val">Diskold v3.1.0</span></div>
       <div class="modal-row"><span class="modal-key">CREADOR</span><span class="modal-val">Kold</span></div>
-      <div class="modal-row"><span class="modal-key">FEATURES</span><span class="modal-val">Chat · Voz · Música · Watch Party</span></div>
+      <div class="modal-row"><span class="modal-key">FEATURES</span><span class="modal-val">Chat · Canales · Voz · Música · Watch Party</span></div>
     </div>
     <button class="modal-close" onclick="closeProfile()">Cerrar</button>
     <button class="btn-danger" onclick="logout()">Cerrar sesión</button>
@@ -633,29 +651,57 @@
 <script>
 // ── State ─────────────────────────────────────────────────
 let myToken='', myName='', myAvatar=null;
+let myChannel='general';
 let inVoice=false, micMuted=false, localStream=null;
 const peers={};
 const socket=io();
 
+// Segundo plano: Wake Lock API (mantiene pantalla activa)
+let wakeLock=null;
+async function requestWakeLock(){
+  try{
+    if('wakeLock' in navigator){
+      wakeLock=await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release',()=>{ wakeLock=null; });
+    }
+  }catch(e){}
+}
+// Re-adquirir wake lock si se pierde (ej: cambio de tab)
+document.addEventListener('visibilitychange',async()=>{
+  if(document.visibilityState==='visible' && !wakeLock) await requestWakeLock();
+});
+
+// Registro de Service Worker para segundo plano
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('/sw.js').catch(()=>{});
+}
+
 // Watch Party state
 let wpActive=false, wpVideoId=null, wpPlaying=false, wpIframe=null;
 
-// ── YouTube API (música + watch party comparten la misma API) ─
+// ── YouTube API ───────────────────────────────────────────
 let ytPlayer=null, ytReady=false;
 window.onYouTubeIframeAPIReady=()=>{
   ytReady=true;
-  // Player de música (oculto)
-  ytPlayer=new YT.Player('yt-player',{height:'1',width:'1',playerVars:{autoplay:0,controls:0},
+  ytPlayer=new YT.Player('yt-player',{height:'1',width:'1',
+    playerVars:{autoplay:0,controls:0},
     events:{
       onStateChange:e=>{ if(e.data===YT.PlayerState.ENDED)socket.emit('bot-command',{command:'/skip'}); if(e.data===YT.PlayerState.PLAYING)startProgress(); },
       onReady:()=>ytPlayer.setVolume(80)
     }
   });
-  // FIX: Si había un watch party pendiente de cargarse, iniciarlo ahora
-  if(wpCurrentVid && !wpPlayer){
-    createWpPlayer(wpCurrentVid, wpPendingTime, wpPendingPlay);
-  }
+  // Si había Watch Party pendiente de cargar, iniciarlo ahora
+  if(wpCurrentVid && !wpPlayer) createWpPlayer(wpCurrentVid, wpPendingTime, wpPendingPlay);
 };
+
+// Keepalive del Service Worker cada 25 segundos
+if('serviceWorker' in navigator){
+  setInterval(()=>{
+    navigator.serviceWorker.ready.then(reg=>{
+      if(reg.active) reg.active.postMessage('keepalive');
+    }).catch(()=>{});
+  }, 25000);
+}
 let progressInterval=null;
 function startProgress(){ clearInterval(progressInterval); progressInterval=setInterval(()=>{ if(!ytPlayer||!ytPlayer.getDuration)return; const d=ytPlayer.getDuration(),c=ytPlayer.getCurrentTime(); if(d>0)document.getElementById('progress-fill').style.width=(c/d*100)+'%'; },1000); }
 
@@ -713,7 +759,69 @@ function enterApp(data){
   document.getElementById('profile-username').textContent=myName;
   updateTopbarAvatar();
   socket.emit('auth',myToken);
+  requestWakeLock();
 }
+
+// ── CANALES ───────────────────────────────────────────────
+let pendingChannel = null;
+
+function tryChannel(channel){
+  // general es abierto, kbros requiere clave
+  if(channel==='general'){ switchChannel('general'); return; }
+  // Abrir modal de clave
+  pendingChannel = channel;
+  document.getElementById('ch-modal-name').textContent='# '+channel;
+  document.getElementById('ch-pass-input').value='';
+  document.getElementById('ch-pass-error').classList.remove('show');
+  document.getElementById('ch-modal').classList.add('open');
+  setTimeout(()=>document.getElementById('ch-pass-input').focus(),100);
+}
+
+function closeChanModal(){ document.getElementById('ch-modal').classList.remove('open'); pendingChannel=null; }
+
+document.getElementById('ch-pass-input').addEventListener('keydown',e=>e.key==='Enter'&&submitChanPass());
+
+async function submitChanPass(){
+  const password = document.getElementById('ch-pass-input').value;
+  const errEl = document.getElementById('ch-pass-error');
+  errEl.classList.remove('show');
+
+  const res = await fetch('/api/channel-join',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({channel:pendingChannel,password})});
+  const data = await res.json();
+
+  if(!data.ok){ errEl.textContent=data.error; errEl.classList.add('show'); return; }
+  const ch = pendingChannel;
+  closeChanModal();
+  switchChannel(ch);
+}
+
+function switchChannel(channel){
+  if(channel===myChannel) return;
+  myChannel=channel;
+  socket.emit('join-channel',{channel});
+
+  // Actualizar UI del sidebar
+  document.querySelectorAll('.ch-item').forEach(el=>el.classList.remove('active'));
+  const chEl=document.getElementById('ch-'+channel);
+  if(chEl) chEl.classList.add('active');
+
+  // Actualizar header del chat
+  document.getElementById('ch-header-sym').textContent = channel==='kbros' ? '🔒' : '#';
+  document.getElementById('ch-header-name').textContent = channel;
+  document.getElementById('topbar-ch').textContent = (channel==='kbros'?'🔒':'#')+' '+channel;
+
+  // Limpiar mensajes al cambiar canal
+  document.getElementById('messages').innerHTML='';
+
+  // Volver al chat si estaba en watch party
+  if(wpActive) leaveWatchPartyLocal();
+  showChat();
+  closeSidebar();
+}
+
+socket.on('channel-joined',({channel})=>{
+  myChannel=channel;
+});
 
 function updateTopbarAvatar(){
   const el=document.getElementById('topbar-av');
@@ -855,187 +963,155 @@ function startWatchParty(){
 }
 
 // ── WATCH PARTY PLAYER ───────────────────────────────────
-// Usamos un iframe con la YouTube IFrame API correctamente
-// FIX 1: player real de YT API en vez de iframe postMessage (no funciona en móvil)
-// FIX 2: inicio sincronizado — todos esperan a que el video cargue
-// FIX 3: sync funcional usando seekTo real
-// FIX 4: viewers count actualizado en tiempo real
-
-let wpPlayer       = null;
-let wpPlayerReady  = false;
-let wpPendingPlay  = false;
-let wpPendingTime  = 0;
-let wpCurrentVid   = null;
-let wpIgnoreEvents = false; // evita bucles de eventos
+let wpPlayer=null, wpPlayerReady=false;
+let wpPendingPlay=false, wpPendingTime=0, wpCurrentVid=null;
+let wpIgnoreEvents=false;
 
 function createWpPlayer(videoId, startTime, shouldPlay){
-  wpCurrentVid  = videoId;
-  wpPlayerReady = false;
-  wpPendingPlay = shouldPlay;
-  wpPendingTime = startTime || 0;
-  wpIgnoreEvents = true;
+  wpCurrentVid=videoId; wpPlayerReady=false;
+  wpPendingPlay=shouldPlay; wpPendingTime=startTime||0;
+  wpIgnoreEvents=true;
 
-  if(wpPlayer){ try{ wpPlayer.destroy(); }catch(e){} wpPlayer=null; }
+  if(wpPlayer){ try{wpPlayer.destroy();}catch(e){} wpPlayer=null; }
 
-  // Recrea el contenedor limpio
-  const wrap = document.getElementById('yt-embed-wrap');
-  wrap.innerHTML = '';
-  const div = document.createElement('div');
-  div.id = 'wp-yt-div';
-  div.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;';
+  const wrap=document.getElementById('yt-embed-wrap');
+  wrap.innerHTML='';
+  const div=document.createElement('div');
+  div.id='wp-yt-div';
+  div.style.cssText='position:absolute;inset:0;width:100%;height:100%;';
   wrap.appendChild(div);
 
-  if(!ytReady){
-    // YT API aún no cargó — guardar pendiente y esperar
-    return;
-  }
+  if(!ytReady) return; // se creará cuando ytReady dispare
 
-  wpPlayer = new YT.Player('wp-yt-div', {
-    width:'100%', height:'100%',
-    videoId: videoId,
-    playerVars:{
-      autoplay:    0,
-      controls:    1,
-      rel:         0,
-      modestbranding: 1,
-      playsinline: 1,   // CRÍTICO iOS — reproduce en la página, no pantalla completa forzada
-      origin:      location.origin,
-    },
+  wpPlayer=new YT.Player('wp-yt-div',{
+    width:'100%', height:'100%', videoId:videoId,
+    playerVars:{ autoplay:0, controls:1, rel:0, modestbranding:1, playsinline:1, origin:location.origin },
     events:{
       onReady(e){
-        wpPlayerReady = true;
-        wpIgnoreEvents = false;
-        if(wpPendingTime > 1) e.target.seekTo(wpPendingTime, true);
-        // FIX 2: solo reproducir si hay play pendiente (inicio sincronizado)
+        wpPlayerReady=true; wpIgnoreEvents=false;
+        if(wpPendingTime>1) e.target.seekTo(wpPendingTime,true);
         if(wpPendingPlay) e.target.playVideo();
-        wpPendingPlay = false;
+        wpPendingPlay=false;
       },
       onStateChange(e){
         if(wpIgnoreEvents) return;
-        if(e.data === YT.PlayerState.PAUSED && wpPlaying){
-          wpPlaying = false; updateWpButtons();
-          const t = safeGetTime();
-          socket.emit('watch-pause',{currentTime:t});
+        // El usuario pausó/dio play directamente en el player → sincronizar a todos
+        if(e.data===YT.PlayerState.PAUSED && wpPlaying){
+          wpPlaying=false; updateWpButtons();
+          socket.emit('watch-pause',{currentTime:safeGetTime(),channel:myChannel});
         }
-        if(e.data === YT.PlayerState.PLAYING && !wpPlaying){
-          wpPlaying = true; updateWpButtons();
-          const t = safeGetTime();
-          socket.emit('watch-play',{currentTime:t});
+        if(e.data===YT.PlayerState.PLAYING && !wpPlaying){
+          wpPlaying=true; updateWpButtons();
+          socket.emit('watch-play',{currentTime:safeGetTime(),channel:myChannel});
         }
       }
     }
   });
 }
 
-// Llama a una función del player de forma segura
-function wpCmd(fn, arg){
-  if(!wpPlayer || !wpPlayerReady) return false;
+function wpCmd(fn,arg){
+  if(!wpPlayer||!wpPlayerReady) return false;
   try{ wpPlayer[fn](arg); return true; }catch(e){ return false; }
 }
-
 function safeGetTime(){
-  try{ return (wpPlayer&&wpPlayerReady) ? wpPlayer.getCurrentTime() : 0; }catch(e){ return 0; }
+  try{ return (wpPlayer&&wpPlayerReady)?wpPlayer.getCurrentTime():0; }catch(e){ return 0; }
 }
-
 function updateWpButtons(){
-  const label = wpPlaying ? '⏸ Pausar' : '▶ Play';
-  ['wp-play-btn','mob-play-btn'].forEach(id=>{ const el=document.getElementById(id); if(el) el.textContent=label; });
+  const label=wpPlaying?'⏸ Pausar':'▶ Play';
+  ['wp-play-btn','mob-play-btn'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=label;});
 }
 
-// ── WATCH PARTY SOCKET EVENTS ─────────────────────────────
-socket.on('watch-state', state => {
-  if(!state.active){ if(wpActive) leaveWatchPartyLocal(); return; }
+// ── WATCH-STATE: nuevo video o llegada al canal ───────────
+socket.on('watch-state',state=>{
+  if(!state.active){ if(wpActive)leaveWatchPartyLocal(); return; }
 
-  const isNewVideo = !wpActive || wpCurrentVid !== state.videoId;
-  wpActive  = true;
-  wpVideoId = state.videoId;
-  wpPlaying = state.playing;
+  const isNew=!wpActive||wpCurrentVid!==state.videoId;
+  wpActive=true; wpVideoId=state.videoId; wpPlaying=state.playing;
 
-  // Tiempo estimado compensando latencia de red
-  const elapsed = state.playing ? (Date.now() - state.lastSync) / 1000 : 0;
-  const syncTime = Math.max(0, (state.currentTime||0) + elapsed);
+  const elapsed=state.playing?(Date.now()-state.lastSync)/1000:0;
+  const syncTime=Math.max(0,(state.currentTime||0)+elapsed);
 
-  // Actualizar textos
-  const title = state.title || 'Watch Party';
+  const title=state.title||'Watch Party';
   ['watch-topbar-title','watch-title-bar','mob-watch-title'].forEach(id=>{
-    const el=document.getElementById(id); if(el) el.textContent=title;
+    const el=document.getElementById(id);if(el)el.textContent=title;
   });
   const mobBy=document.getElementById('mob-watch-by');
-  if(mobBy) mobBy.textContent = state.startedBy ? `Iniciada por ${state.startedBy}` : '';
+  if(mobBy)mobBy.textContent=state.startedBy?`Iniciada por ${state.startedBy}`:'';
 
   document.getElementById('watch-party-btn').classList.add('live');
   document.getElementById('watch-party-btn').innerHTML='<div class="watch-dot"></div> LIVE';
   updateWpButtons();
 
-  if(isNewVideo){
-    // FIX 1: usar YT.Player API real, no iframe src
-    createWpPlayer(state.videoId, syncTime, state.playing);
+  if(isNew){
+    createWpPlayer(state.videoId,syncTime,state.playing);
   } else {
-    // Mismo video: solo sincronizar posición
-    wpIgnoreEvents = true;
-    if(state.playing){ wpCmd('seekTo', syncTime); wpCmd('playVideo'); }
-    else { wpCmd('pauseVideo'); wpCmd('seekTo', syncTime); }
-    setTimeout(()=>{ wpIgnoreEvents=false; }, 500);
+    // Mismo video: solo sincronizar
+    applyWpCmd(state.playing?'sync-play':'sync-pause',syncTime);
   }
-
   showWatchView();
 });
 
-// Alguien dio play
-socket.on('watch-play', ({currentTime}) => {
-  wpPlaying = true; updateWpButtons();
-  wpIgnoreEvents = true;
-  wpCmd('seekTo', currentTime + 0.2);
-  wpCmd('playVideo');
-  setTimeout(()=>{ wpIgnoreEvents=false; }, 500);
+// ── WATCH-CMD: play/pause/sync unificado para TODOS ───────
+socket.on('watch-cmd',({action,currentTime})=>{
+  switch(action){
+    case 'play':
+    case 'sync-play':
+      wpPlaying=true; updateWpButtons();
+      applyWpCmd('play',currentTime);
+      break;
+    case 'pause':
+    case 'sync-pause':
+      wpPlaying=false; updateWpButtons();
+      applyWpCmd('pause',currentTime);
+      break;
+  }
 });
 
-// Alguien pausó
-socket.on('watch-pause', ({currentTime}) => {
-  wpPlaying = false; updateWpButtons();
-  wpIgnoreEvents = true;
-  wpCmd('pauseVideo');
-  wpCmd('seekTo', currentTime);
-  setTimeout(()=>{ wpIgnoreEvents=false; }, 500);
-});
+function applyWpCmd(action,currentTime){
+  if(!wpPlayer||!wpPlayerReady){
+    // Player no listo: guardar pendiente
+    wpPendingTime=currentTime||0;
+    wpPendingPlay=(action==='play'||action==='sync-play');
+    return;
+  }
+  wpIgnoreEvents=true;
+  if(action==='play'||action==='sync-play'){
+    wpCmd('seekTo',currentTime+0.3); // compensar latencia
+    wpCmd('playVideo');
+  } else {
+    wpCmd('pauseVideo');
+    wpCmd('seekTo',currentTime);
+  }
+  setTimeout(()=>{ wpIgnoreEvents=false; },600);
+}
 
-// Seek externo
-socket.on('watch-seek', ({currentTime}) => {
-  wpIgnoreEvents = true;
-  wpCmd('seekTo', currentTime);
-  setTimeout(()=>{ wpIgnoreEvents=false; }, 300);
-});
-
-socket.on('watch-error', msg => alert('Watch Party: ' + msg));
+socket.on('watch-error',msg=>alert('Watch Party: '+msg));
 
 // Botón Play/Pausa
 function wpTogglePlay(){
-  if(!wpPlayer || !wpPlayerReady){
-    // FIX: en móvil si el player no está listo, intentar crearlo de nuevo
-    if(wpCurrentVid) createWpPlayer(wpCurrentVid, wpPendingTime, true);
+  if(!wpPlayer||!wpPlayerReady){
+    if(wpCurrentVid) createWpPlayer(wpCurrentVid,wpPendingTime,true);
     return;
   }
-  const t = safeGetTime();
-  if(wpPlaying) socket.emit('watch-pause',{currentTime:t});
-  else          socket.emit('watch-play', {currentTime:t});
+  const t=safeGetTime();
+  if(wpPlaying) socket.emit('watch-pause',{currentTime:t,channel:myChannel});
+  else          socket.emit('watch-play', {currentTime:t,channel:myChannel});
 }
 
-// FIX 3: Sync real — pide estado y lo aplica
-function requestSync(){
-  socket.emit('watch-sync-request');
-}
+// Sincronizar — fuerza sync a TODOS en el canal
+function requestSync(){ socket.emit('watch-sync-request',{channel:myChannel}); }
 
 function leaveWatchParty(){
-  socket.emit('watch-stop');
+  socket.emit('watch-stop',{channel:myChannel});
   leaveWatchPartyLocal();
 }
 
 function leaveWatchPartyLocal(){
-  wpActive=false; wpVideoId=null; wpPlaying=false; wpCurrentVid=null;
+  wpActive=false;wpVideoId=null;wpPlaying=false;wpCurrentVid=null;
   wpIgnoreEvents=true;
-  if(wpPlayer){ try{ wpPlayer.destroy(); }catch(e){} wpPlayer=null; wpPlayerReady=false; }
+  if(wpPlayer){try{wpPlayer.destroy();}catch(e){}wpPlayer=null;wpPlayerReady=false;}
   const wrap=document.getElementById('yt-embed-wrap');
-  if(wrap){ wrap.innerHTML=''; }
+  if(wrap)wrap.innerHTML='';
   document.getElementById('watch-party-btn').classList.remove('live');
   document.getElementById('watch-party-btn').innerHTML='🎬 Watch Party';
   showChat();

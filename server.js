@@ -1,5 +1,5 @@
 /**
- * DISKOLD v3.0 — Chat + Voz + Música + Watch Party
+ * DISKOLD v3.1 — Chat + Voz + Música + Watch Party + Canales
  * Creado por Kold
  */
 
@@ -18,24 +18,39 @@ const io     = new Server(server, { cors: { origin: '*' } });
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json({ limit: '5mb' }));
 
+// ── Canales ───────────────────────────────────────────────
+const CHANNELS = {
+  'general': { password: null,       description: 'Chat principal' },
+  'kbros':   { password: 'moscosos', description: 'Canal privado'  },
+};
+
+app.post('/api/channel-join', (req, res) => {
+  const { channel, password } = req.body;
+  const ch = CHANNELS[channel];
+  if (!ch) return res.json({ ok: false, error: 'Canal no existe.' });
+  if (ch.password && ch.password !== password)
+    return res.json({ ok: false, error: 'Clave incorrecta.' });
+  res.json({ ok: true });
+});
+
 // ── Base de datos ─────────────────────────────────────────
 const DB_PATH = path.join(__dirname, 'data', 'users.json');
-function readDB() { try { return JSON.parse(fs.readFileSync(DB_PATH,'utf8')); } catch(e) { return {users:[]}; } }
-function writeDB(d) { fs.writeFileSync(DB_PATH, JSON.stringify(d,null,2)); }
-function hashPwd(p) { return crypto.createHash('sha256').update(p+'diskold_salt_kold').digest('hex'); }
-function genToken() { return crypto.randomBytes(32).toString('hex'); }
+function readDB()  { try { return JSON.parse(fs.readFileSync(DB_PATH,'utf8')); } catch(e) { return {users:[]}; } }
+function writeDB(d){ fs.writeFileSync(DB_PATH, JSON.stringify(d,null,2)); }
+function hashPwd(p){ return crypto.createHash('sha256').update(p+'diskold_salt_kold').digest('hex'); }
+function genToken(){ return crypto.randomBytes(32).toString('hex'); }
 
 const sessions = {};
 
-// ── Auth endpoints ────────────────────────────────────────
 app.post('/api/register', (req,res) => {
   const {username,password,avatar} = req.body;
   if(!username||!password) return res.json({ok:false,error:'Faltan datos.'});
   if(username.length<2||username.length>20) return res.json({ok:false,error:'Nombre: 2-20 caracteres.'});
   if(password.length<4) return res.json({ok:false,error:'Contraseña muy corta.'});
   const db=readDB();
-  if(db.users.find(u=>u.username.toLowerCase()===username.toLowerCase())) return res.json({ok:false,error:'Usuario ya existe.'});
-  const user = {id:crypto.randomUUID(),username,password:hashPwd(password),avatar:avatar||null,createdAt:new Date().toISOString()};
+  if(db.users.find(u=>u.username.toLowerCase()===username.toLowerCase()))
+    return res.json({ok:false,error:'Usuario ya existe.'});
+  const user={id:crypto.randomUUID(),username,password:hashPwd(password),avatar:avatar||null,createdAt:new Date().toISOString()};
   db.users.push(user); writeDB(db);
   const token=genToken(); sessions[token]={username,avatar:user.avatar,id:user.id};
   res.json({ok:true,token,username,avatar:user.avatar});
@@ -68,43 +83,42 @@ app.post('/api/verify', (req,res) => {
   else res.json({ok:false});
 });
 
-// ── Watch Party State ─────────────────────────────────────
-const watchParty = {
-  active: false,
-  videoId: null,
-  title: null,
-  thumbnail: null,
-  playing: false,
-  currentTime: 0,
-  startedBy: null,
-  lastSync: Date.now(),
+// ── Watch Party (uno por canal) ───────────────────────────
+const watchParties = {
+  'general': { active:false,videoId:null,title:null,playing:false,currentTime:0,startedBy:null,lastSync:Date.now() },
+  'kbros':   { active:false,videoId:null,title:null,playing:false,currentTime:0,startedBy:null,lastSync:Date.now() },
 };
 
-function extractVideoId(url) {
-  const patterns = [
+function getWp(ch){ return watchParties[ch] || watchParties['general']; }
+
+function calcCurrentTime(wp){
+  if(!wp.playing) return wp.currentTime||0;
+  return (wp.currentTime||0) + (Date.now()-wp.lastSync)/1000;
+}
+
+function extractVideoId(url){
+  const pp=[
     /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/,
     /^([a-zA-Z0-9_-]{11})$/
   ];
-  for(const p of patterns) { const m=url.match(p); if(m) return m[1]; }
+  for(const p of pp){ const m=url.match(p); if(m) return m[1]; }
   return null;
 }
 
-async function getVideoInfo(videoId) {
-  return new Promise(resolve => {
-    https.get(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`, res => {
+async function getVideoInfo(videoId){
+  return new Promise(resolve=>{
+    https.get(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`,res=>{
       let d=''; res.on('data',c=>d+=c);
-      res.on('end',()=>{ try{ const j=JSON.parse(d); resolve({title:j.title,thumbnail:`https://img.youtube.com/vi/${videoId}/mqdefault.jpg`}); }catch(e){resolve({title:'Video de YouTube',thumbnail:`https://img.youtube.com/vi/${videoId}/mqdefault.jpg`});} });
-    }).on('error',()=>resolve({title:'Video de YouTube',thumbnail:`https://img.youtube.com/vi/${videoId}/mqdefault.jpg`}));
+      res.on('end',()=>{ try{ const j=JSON.parse(d); resolve({title:j.title}); }catch(e){ resolve({title:'Video de YouTube'}); } });
+    }).on('error',()=>resolve({title:'Video de YouTube'}));
   });
 }
 
-app.get('/api/watch-state', (req,res) => res.json(watchParty));
-
 // ── Music Bot ─────────────────────────────────────────────
-const musicBot = { queue:[], playing:false, current:null, volume:80, paused:false };
+const musicBot={queue:[],playing:false,current:null,volume:80,paused:false};
 
-async function searchYouTube(query) {
-  return new Promise(resolve => {
+async function searchYouTube(query){
+  return new Promise(resolve=>{
     const q=encodeURIComponent(query);
     https.get(`https://www.youtube.com/results?search_query=${q}`,{headers:{'User-Agent':'Mozilla/5.0'}},res=>{
       let d=''; res.on('data',c=>d+=c);
@@ -119,104 +133,120 @@ async function searchYouTube(query) {
   });
 }
 
-app.get('/api/search', async(req,res) => { const r=await searchYouTube(req.query.q||''); res.json({results:r}); });
-app.get('/api/music-state', (req,res) => res.json(musicBot));
+app.get('/api/search',async(req,res)=>{ const r=await searchYouTube(req.query.q||''); res.json({results:r}); });
+app.get('/api/music-state',(req,res)=>res.json(musicBot));
 
 // ── Socket.io ─────────────────────────────────────────────
-const users = {};
-const rooms = {};
+const users={};
+const rooms={};
 
-io.on('connection', socket => {
+io.on('connection',socket=>{
 
-  socket.on('auth', token => {
+  socket.on('auth',token=>{
     const s=sessions[token];
     if(!s){socket.emit('auth-error','Sesión inválida.');return;}
-    users[socket.id]={username:s.username,avatar:s.avatar};
+    users[socket.id]={username:s.username,avatar:s.avatar,channel:'general'};
+    socket.join('ch:general');
     io.emit('user-list',buildUserList());
-    broadcast_system(`${s.username} entró a Diskold`);
+    io.to('ch:general').emit('chat-message',{system:true,text:`${s.username} entró a Diskold`,time:now()});
     socket.emit('auth-ok',s);
     socket.emit('music-state',musicBot);
-    socket.emit('watch-state',watchParty);
+    socket.emit('watch-state',{...getWp('general'),channel:'general'});
+  });
+
+  // ── Cambiar canal ─────────────────────────────────────
+  socket.on('join-channel',({channel})=>{
+    if(!users[socket.id]) return;
+    const prev=users[socket.id].channel;
+    if(prev===channel) return;
+    socket.leave('ch:'+prev);
+    io.to('ch:'+prev).emit('chat-message',{system:true,text:`${users[socket.id].username} salió del canal`,time:now()});
+    users[socket.id].channel=channel;
+    socket.join('ch:'+channel);
+    io.to('ch:'+channel).emit('chat-message',{system:true,text:`${users[socket.id].username} entró al canal`,time:now()});
+    io.emit('user-list',buildUserList());
+    const wp=getWp(channel);
+    if(wp.playing){ wp.currentTime=calcCurrentTime(wp); wp.lastSync=Date.now(); }
+    socket.emit('watch-state',{...wp,channel});
+    socket.emit('channel-joined',{channel});
   });
 
   // ── Chat ──────────────────────────────────────────────
-  socket.on('chat-message', text => {
+  socket.on('chat-message',text=>{
     if(!users[socket.id]) return;
-    const {username,avatar}=users[socket.id];
-    if(text.startsWith('/')) { handleBotCommand(socket,username,text); return; }
-    io.emit('chat-message',{user:username,avatar,text,time:now()});
+    const {username,avatar,channel}=users[socket.id];
+    if(text.startsWith('/')){handleBotCommand(socket,username,channel,text);return;}
+    io.to('ch:'+channel).emit('chat-message',{user:username,avatar,text,time:now(),channel});
   });
 
-  socket.on('bot-command', data => {
+  socket.on('bot-command',data=>{
     if(!users[socket.id]) return;
-    handleBotCommand(socket,users[socket.id].username,data.command);
+    handleBotCommand(socket,users[socket.id].username,users[socket.id].channel,data.command);
   });
 
   // ── Watch Party ────────────────────────────────────────
-  socket.on('watch-start', async({url}) => {
+  socket.on('watch-start',async({url})=>{
     if(!users[socket.id]) return;
+    const channel=users[socket.id].channel;
     const videoId=extractVideoId(url);
-    if(!videoId){socket.emit('watch-error','Link de YouTube inválido.');return;}
+    if(!videoId){socket.emit('watch-error','Link inválido.');return;}
     const info=await getVideoInfo(videoId);
-    watchParty.active=true;
-    watchParty.videoId=videoId;
-    watchParty.title=info.title;
-    watchParty.thumbnail=info.thumbnail;
-    watchParty.playing=false;
-    watchParty.currentTime=0;
-    watchParty.startedBy=users[socket.id].username;
-    watchParty.lastSync=Date.now();
-    io.emit('watch-state',watchParty);
-    io.emit('chat-message',{bot:true,user:'🎬 Watch Party',text:`**${users[socket.id].username}** inició Watch Party:\n🎥 ${info.title}`,time:now()});
+    const wp=getWp(channel);
+    wp.active=true;wp.videoId=videoId;wp.title=info.title;
+    wp.playing=false;wp.currentTime=0;
+    wp.startedBy=users[socket.id].username;wp.lastSync=Date.now();
+    io.to('ch:'+channel).emit('watch-state',{...wp,channel});
+    io.to('ch:'+channel).emit('chat-message',{bot:true,user:'🎬 Watch Party',
+      text:`**${users[socket.id].username}** inició:\n🎥 ${info.title}`,time:now(),channel});
   });
 
-  socket.on('watch-play', ({currentTime}) => {
+  // PLAY → broadcast a TODOS en el canal (io.to, no socket.broadcast)
+  socket.on('watch-play',({currentTime,channel:ch})=>{
     if(!users[socket.id]) return;
-    watchParty.playing=true;
-    watchParty.currentTime=currentTime||0;
-    watchParty.lastSync=Date.now();
-    socket.broadcast.emit('watch-play',{currentTime:watchParty.currentTime});
+    const channel=ch||users[socket.id].channel;
+    const wp=getWp(channel);
+    wp.playing=true; wp.currentTime=currentTime||0; wp.lastSync=Date.now();
+    io.to('ch:'+channel).emit('watch-cmd',{action:'play',currentTime:wp.currentTime,ts:wp.lastSync});
   });
 
-  socket.on('watch-pause', ({currentTime}) => {
+  // PAUSE → broadcast a TODOS
+  socket.on('watch-pause',({currentTime,channel:ch})=>{
     if(!users[socket.id]) return;
-    watchParty.playing=false;
-    watchParty.currentTime=currentTime||0;
-    watchParty.lastSync=Date.now();
-    socket.broadcast.emit('watch-pause',{currentTime:watchParty.currentTime});
+    const channel=ch||users[socket.id].channel;
+    const wp=getWp(channel);
+    wp.playing=false; wp.currentTime=currentTime||0; wp.lastSync=Date.now();
+    io.to('ch:'+channel).emit('watch-cmd',{action:'pause',currentTime:wp.currentTime,ts:wp.lastSync});
   });
 
-  socket.on('watch-seek', ({currentTime}) => {
+  // SYNC → calcula tiempo real y manda a TODOS
+  socket.on('watch-sync-request',({channel:ch}={})=>{
+    const channel=(ch||users[socket.id]?.channel)||'general';
+    const wp=getWp(channel);
+    if(wp.playing){ wp.currentTime=calcCurrentTime(wp); wp.lastSync=Date.now(); }
+    io.to('ch:'+channel).emit('watch-cmd',{
+      action: wp.playing ? 'sync-play' : 'sync-pause',
+      currentTime: wp.currentTime,
+      ts: wp.lastSync
+    });
+  });
+
+  socket.on('watch-stop',({channel:ch}={})=>{
     if(!users[socket.id]) return;
-    watchParty.currentTime=currentTime;
-    watchParty.lastSync=Date.now();
-    io.emit('watch-seek',{currentTime});
-  });
-
-  socket.on('watch-sync-request', () => {
-    // Calcular tiempo actual del video en el servidor
-    if(watchParty.playing){
-      const elapsed = (Date.now() - watchParty.lastSync) / 1000;
-      watchParty.currentTime = (watchParty.currentTime||0) + elapsed;
-      watchParty.lastSync = Date.now();
-    }
-    socket.emit('watch-state', watchParty);
-  });
-
-  socket.on('watch-stop', () => {
-    if(!users[socket.id]) return;
-    watchParty.active=false; watchParty.videoId=null; watchParty.playing=false; watchParty.currentTime=0;
-    io.emit('watch-state',watchParty);
-    io.emit('chat-message',{bot:true,user:'🎬 Watch Party',text:`**${users[socket.id].username}** terminó el Watch Party.`,time:now()});
+    const channel=ch||users[socket.id].channel;
+    const wp=getWp(channel);
+    wp.active=false;wp.videoId=null;wp.playing=false;wp.currentTime=0;
+    io.to('ch:'+channel).emit('watch-state',{...wp,channel});
+    io.to('ch:'+channel).emit('chat-message',{bot:true,user:'🎬 Watch Party',
+      text:`**${users[socket.id].username}** terminó el Watch Party.`,time:now(),channel});
   });
 
   // ── WebRTC ─────────────────────────────────────────────
-  socket.on('join-voice', roomId => {
+  socket.on('join-voice',roomId=>{
     if(!users[socket.id]) return;
     if(!rooms[roomId]) rooms[roomId]=[];
-    const peers=rooms[roomId].filter(id=>id!==socket.id);
-    socket.emit('existing-peers',peers);
-    peers.forEach(p=>io.to(p).emit('peer-joined',{peerId:socket.id,username:users[socket.id].username}));
+    const pp=rooms[roomId].filter(id=>id!==socket.id);
+    socket.emit('existing-peers',pp);
+    pp.forEach(p=>io.to(p).emit('peer-joined',{peerId:socket.id,username:users[socket.id].username}));
     rooms[roomId].push(socket.id); socket.join(roomId); socket.currentRoom=roomId;
     emitVoiceUsers(roomId);
   });
@@ -228,7 +258,7 @@ io.on('connection', socket => {
 
   socket.on('disconnect',()=>{
     const u=users[socket.id];
-    if(u) broadcast_system(`${u.username} salió de Diskold`);
+    if(u) io.to('ch:'+u.channel).emit('chat-message',{system:true,text:`${u.username} salió de Diskold`,time:now()});
     leaveVoice(socket); delete users[socket.id];
     io.emit('user-list',buildUserList());
   });
@@ -244,10 +274,11 @@ io.on('connection', socket => {
   }
 });
 
-// ── Bot de música ─────────────────────────────────────────
-async function handleBotCommand(socket,username,text){
-  const parts=text.trim().split(' '); const cmd=parts[0].toLowerCase(); const args=parts.slice(1).join(' ');
-  io.emit('chat-message',{user:username,avatar:users[socket.id]?.avatar,text,time:now()});
+// ── Bot ───────────────────────────────────────────────────
+async function handleBotCommand(socket,username,channel,text){
+  const parts=text.trim().split(' ');const cmd=parts[0].toLowerCase();const args=parts.slice(1).join(' ');
+  io.to('ch:'+channel).emit('chat-message',{user:username,avatar:users[socket.id]?.avatar,text,time:now(),channel});
+  const botMsg=t=>io.to('ch:'+channel).emit('chat-message',{bot:true,user:'🤖 KoldBot',text:t,time:now(),channel});
   switch(cmd){
     case '/play':{
       if(!args){botMsg('❄️ Uso: `/play nombre canción`');return;}
@@ -256,50 +287,47 @@ async function handleBotCommand(socket,username,text){
       if(!r.length){botMsg('❌ Sin resultados.');return;}
       const song={...r[0],requestedBy:username};
       musicBot.queue.push(song);
-      if(!musicBot.playing) playNext();
+      if(!musicBot.playing) playNext(botMsg);
       else{botMsg(`✅ **${song.title}** en cola (#${musicBot.queue.length})`);io.emit('music-state',musicBot);}
       break;
     }
     case '/watch':{
-      if(!args){botMsg('🎬 Uso: `/watch [link de YouTube]`');return;}
-      const videoId=extractVideoId(args);
-      if(!videoId){botMsg('❌ Link inválido.');return;}
-      const info=await getVideoInfo(videoId);
-      watchParty.active=true; watchParty.videoId=videoId; watchParty.title=info.title;
-      watchParty.thumbnail=info.thumbnail; watchParty.playing=false; watchParty.currentTime=0;
-      watchParty.startedBy=username; watchParty.lastSync=Date.now();
-      io.emit('watch-state',watchParty);
-      io.emit('chat-message',{bot:true,user:'🎬 Watch Party',text:`**${username}** inició Watch Party:\n🎥 ${info.title}`,time:now()});
+      if(!args){botMsg('🎬 Uso: `/watch [YouTube URL]`');return;}
+      const vid=extractVideoId(args);if(!vid){botMsg('❌ Link inválido.');return;}
+      const info=await getVideoInfo(vid);
+      const wp=getWp(channel);
+      wp.active=true;wp.videoId=vid;wp.title=info.title;wp.playing=false;
+      wp.currentTime=0;wp.startedBy=username;wp.lastSync=Date.now();
+      io.to('ch:'+channel).emit('watch-state',{...wp,channel});
+      botMsg(`🎬 Watch Party:\n🎥 ${info.title}`);
       break;
     }
-    case '/skip':{if(!musicBot.current){botMsg('❌ Nada reproduciéndose.');return;}botMsg(`⏭️ **${username}** saltó.`);playNext();break;}
+    case '/skip':{if(!musicBot.current){botMsg('❌ Nada.');return;}botMsg('⏭️ Saltado.');playNext(botMsg);break;}
     case '/stop':{musicBot.queue=[];musicBot.playing=false;musicBot.current=null;musicBot.paused=false;io.emit('music-state',musicBot);io.emit('music-stop');botMsg('⏹️ Detenido.');break;}
     case '/pause':{if(!musicBot.playing){botMsg('❌ Sin música.');return;}musicBot.paused=true;io.emit('music-state',musicBot);io.emit('music-pause');botMsg('⏸️ Pausada.');break;}
     case '/resume':{if(!musicBot.paused){botMsg('❌ No pausada.');return;}musicBot.paused=false;io.emit('music-state',musicBot);io.emit('music-resume');botMsg('▶️ Reanudada.');break;}
-    case '/volume':{const v=parseInt(args);if(isNaN(v)||v<0||v>100){botMsg('❌ Uso: `/volume 0-100`');return;}musicBot.volume=v;io.emit('music-state',musicBot);io.emit('music-volume',v);botMsg(`🔊 Volumen: **${v}%**`);break;}
+    case '/volume':{const v=parseInt(args);if(isNaN(v)||v<0||v>100){botMsg('❌ `/volume 0-100`');return;}musicBot.volume=v;io.emit('music-state',musicBot);io.emit('music-volume',v);botMsg(`🔊 ${v}%`);break;}
     case '/queue':{if(!musicBot.current&&!musicBot.queue.length){botMsg('📋 Cola vacía.');return;}let msg='📋 **Cola:**\n';if(musicBot.current)msg+=`▶️ ${musicBot.current.title}\n`;musicBot.queue.forEach((s,i)=>msg+=`${i+1}. ${s.title}\n`);botMsg(msg);break;}
-    case '/np':{if(!musicBot.current){botMsg('❌ Nada sonando.');return;}botMsg(`🎵 **${musicBot.current.title}** — por ${musicBot.current.requestedBy}`);break;}
-    case '/help':{botMsg('🤖 **KoldBot:**\n`/play [canción]` `/watch [YouTube URL]` `/skip` `/stop` `/pause` `/resume` `/volume [0-100]` `/queue` `/np`');break;}
-    default:{botMsg(`❓ Desconocido. Usa \`/help\`.`);}
+    case '/np':{if(!musicBot.current){botMsg('❌ Nada.');return;}botMsg(`🎵 **${musicBot.current.title}** — ${musicBot.current.requestedBy}`);break;}
+    case '/help':{botMsg('🤖 `/play` `/watch [URL]` `/skip` `/stop` `/pause` `/resume` `/volume` `/queue` `/np`');break;}
+    default:{botMsg('❓ Usa `/help`.');}
   }
 }
 
-function playNext(){
-  if(!musicBot.queue.length){musicBot.playing=false;musicBot.current=null;io.emit('music-state',musicBot);io.emit('music-ended');botMsg('✅ Cola terminada.');return;}
+function playNext(botMsg){
+  if(!musicBot.queue.length){musicBot.playing=false;musicBot.current=null;io.emit('music-state',musicBot);io.emit('music-ended');if(botMsg)botMsg('✅ Cola terminada.');return;}
   musicBot.current=musicBot.queue.shift();musicBot.playing=true;musicBot.paused=false;
   io.emit('music-state',musicBot);io.emit('music-play',musicBot.current);
-  botMsg(`🎵 **${musicBot.current.title}** — por ${musicBot.current.requestedBy}`);
+  if(botMsg)botMsg(`🎵 **${musicBot.current.title}** — ${musicBot.current.requestedBy}`);
 }
 
-function botMsg(text){io.emit('chat-message',{bot:true,user:'🤖 KoldBot',text,time:now()});}
 function now(){return new Date().toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'});}
-function buildUserList(){return Object.entries(users).map(([id,u])=>({id,name:u.username,avatar:u.avatar}));}
-function broadcast_system(text){io.emit('chat-message',{system:true,text,time:now()});}
+function buildUserList(){return Object.entries(users).map(([id,u])=>({id,name:u.username,avatar:u.avatar,channel:u.channel}));}
 
 const PORT=process.env.PORT||3000;
 server.listen(PORT,()=>{
-  console.log(`\n╔══════════════════════════════════╗`);
-  console.log(`║  DISKOLD v3.0  —  by Kold         ║`);
-  console.log(`║  http://localhost:${PORT}            ║`);
-  console.log(`╚══════════════════════════════════╝\n`);
+  console.log(`\n╔══════════════════════════════════════╗`);
+  console.log(`║  DISKOLD v3.1  by Kold               ║`);
+  console.log(`║  http://localhost:${PORT}              ║`);
+  console.log(`╚══════════════════════════════════════╝\n`);
 });
