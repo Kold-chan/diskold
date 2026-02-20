@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,minimum-scale=1,user-scalable=no,viewport-fit=cover"/>
 <meta name="theme-color" content="#0a0a0c"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
@@ -256,11 +256,17 @@ html,body{height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(
 .call-btn.muted{background:rgba(255,68,102,.15);color:var(--red);}
 
 @media(max-width:768px){
-  .ch-sidebar{position:fixed;left:0;top:0;bottom:0;z-index:100;transform:translateX(-100%);transition:transform .25s;width:260px;}
+  /* Drawer: ambas sidebars ocultas, se abren juntas */
+  .srv-sidebar{position:fixed;left:0;top:0;bottom:0;z-index:101;width:60px;transform:translateX(-100%);transition:transform .25s;}
+  .srv-sidebar.open{transform:translateX(0);}
+  .ch-sidebar{position:fixed;left:60px;top:0;bottom:0;z-index:100;width:220px;transform:translateX(calc(-100% - 60px));transition:transform .25s;}
   .ch-sidebar.open{transform:translateX(0);}
-  .srv-sidebar{width:52px;}
   .mob-topbar{display:flex;}
   .topbar{display:none;}
+  /* Evitar que el teclado virtual desplace el layout */
+  #app{position:fixed;inset:0;height:100dvh;}
+  .main{overflow:hidden;}
+  .yt-wrap{min-height:0;}
 }
 </style>
 </head>
@@ -415,7 +421,7 @@ html,body{height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(
         </div>
         <div class="input-wrap">
           <button class="input-btn" onclick="toggleEmoji()">😊</button>
-          <textarea class="msg-input" id="msg-input" placeholder="Escribe un mensaje..." rows="1" maxlength="2000"></textarea>
+          <textarea class="msg-input" id="msg-input" placeholder="Escribe un mensaje..." rows="1" maxlength="2000" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" inputmode="text"></textarea>
           <button class="send-btn" onclick="sendMsg()">▶</button>
         </div>
         <div style="font-size:.65rem;color:var(--muted);margin-top:4px;padding:0 4px;">/play /watch /partydo /skip /stop /pause /help</div>
@@ -450,7 +456,7 @@ html,body{height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(
       <div class="messages-area" id="dm-messages"></div>
       <div class="input-area">
         <div class="input-wrap">
-          <textarea class="msg-input" id="dm-input" placeholder="Envía un mensaje directo..." rows="1" maxlength="2000"></textarea>
+          <textarea class="msg-input" id="dm-input" placeholder="Envía un mensaje directo..." rows="1" maxlength="2000" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" inputmode="text"></textarea>
           <button class="send-btn" onclick="sendDM()">▶</button>
         </div>
       </div>
@@ -466,7 +472,7 @@ html,body{height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(
   <div class="modal">
     <div class="modal-title" style="color:var(--ice);">CREAR SERVIDOR</div>
     <div class="modal-sub">Dale un nombre a tu servidor. Se crearán canales de texto y voz automáticamente.</div>
-    <div class="auth-field"><label class="auth-label">Nombre del servidor</label><input class="modal-input" id="srv-name-input" placeholder="Mi servidor" maxlength="50"/></div>
+    <div class="auth-field"><label class="auth-label">Nombre del servidor</label><input class="modal-input" id="srv-name-input" placeholder="Mi servidor" maxlength="50" autocomplete="off" autocorrect="off"/></div>
     <div class="auth-field"><label class="auth-label">Descripción (opcional)</label><input class="modal-input" id="srv-desc-input" placeholder="Un servidor genial" maxlength="200"/></div>
     <div class="modal-err" id="create-srv-err"></div>
     <div class="modal-btns">
@@ -481,7 +487,7 @@ html,body{height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(
   <div class="modal">
     <div class="modal-title" style="color:var(--purple);">🎬 WATCH PARTY</div>
     <div class="modal-sub">Pega un link de YouTube y todos en el canal verán el video sincronizado.</div>
-    <input class="modal-input" id="watch-url-input" placeholder="https://www.youtube.com/watch?v=..."/>
+    <input class="modal-input" id="watch-url-input" placeholder="https://www.youtube.com/watch?v=..." autocomplete="off" autocorrect="off" spellcheck="false" inputmode="url"/>
     <div class="modal-btns">
       <button class="btn-cancel" onclick="closeModal('watch-modal')">Cancelar</button>
       <button class="btn-primary" onclick="startWatchParty()">INICIAR</button>
@@ -688,28 +694,37 @@ function renderChannelSidebar(){
 }
 
 async function selectChannel(channelId){
-  const ch=currentServer.channels.find(c=>c._id===channelId);
+  // Normalizar channelId a string para comparaciones MongoDB ObjectId
+  const chIdStr = String(channelId);
+  const ch = currentServer.channels.find(c=>String(c._id)===chIdStr||String(c.id)===chIdStr);
   if(!ch||ch.type!=='text') return;
-  currentChannel=ch;
-  currentDMUser=null;
-  unreadCounts[channelId]=0;
+  // Asegurar que _id está disponible como string
+  if(!ch._id) ch._id = channelId;
+  currentChannel = ch;
+  currentDMUser = null;
+  unreadCounts[chIdStr] = 0;
 
   document.querySelectorAll('.ch-item').forEach(e=>e.classList.remove('active'));
-  document.getElementById('chi-'+channelId)?.classList.add('active');
-  document.getElementById('ch-name-top').textContent=ch.name;
-  document.getElementById('mob-ch-name').textContent='# '+ch.name;
-  document.getElementById('ch-sym').textContent='#';
-  document.getElementById('msg-input').placeholder=`Escribe en #${ch.name}...`;
+  document.getElementById('chi-'+chIdStr)?.classList.add('active');
+  const nameTop = document.getElementById('ch-name-top');
+  if(nameTop) nameTop.textContent = ch.name;
+  const mobName = document.getElementById('mob-ch-name');
+  if(mobName) mobName.textContent = '# '+ch.name;
+  const sym = document.getElementById('ch-sym');
+  if(sym) sym.textContent = '#';
+  const inp = document.getElementById('msg-input');
+  if(inp) inp.placeholder = `Escribe en #${ch.name}...`;
 
   showView('chat');
-  document.getElementById('messages').innerHTML='';
-  socket.emit('join-channel',{channelId});
+  document.getElementById('messages').innerHTML = '';
+  socket.emit('join-channel', {channelId: chIdStr});
   closeSidebar();
 }
 
 // ── Messages ───────────────────────────────────────────────
 socket.on('channel-history',({channelId,messages})=>{
-  if(channelId!==currentChannel?._id) return;
+  const myChId=currentChannel?._id||currentChannel?.id;
+  if(String(channelId)!==String(myChId)) return;
   const box=document.getElementById('messages');
   box.innerHTML='';
   messages.forEach(m=>appendMsg(m,box));
@@ -718,13 +733,14 @@ socket.on('channel-history',({channelId,messages})=>{
 
 socket.on('new-message',msg=>{
   const box=msg.dmId?document.getElementById('dm-messages'):document.getElementById('messages');
-  const isMyChannel=msg.channelId===currentChannel?._id;
-  const isMyDM=currentDMUser&&msg.participants?.includes(myUser.id);
+  const myChId=String(currentChannel?._id||currentChannel?.id||'');
+  const msgChId=String(msg.channelId||'');
+  const isMyChannel=msgChId&&myChId&&msgChId===myChId;
+  const isMyDM=currentDMUser&&msg.participants?.includes(myUser?.id);
 
   if(!isMyChannel&&!isMyDM){
-    // Canal no activo → incrementar unread
     if(msg.channelId){
-      unreadCounts[msg.channelId]=(unreadCounts[msg.channelId]||0)+1;
+      unreadCounts[msgChId]=(unreadCounts[msgChId]||0)+1;
       renderChannelSidebar();
     }
     return;
@@ -797,11 +813,12 @@ function isAdmin(){
 function sendMsg(){
   const el=document.getElementById('msg-input');
   const content=el.value.trim();
-  if(!content||!currentChannel) return;
-  socket.emit('send-message',{channelId:currentChannel._id,content,replyToId});
-  el.value=''; el.style.height='auto';
+  const chId=_chId();
+  if(!content||!chId) return;
+  socket.emit('send-message',{channelId:chId,content,replyToId});
+  el.value=''; el.style.height='24px';
   cancelReply();
-  socket.emit('typing-stop',{channelId:currentChannel._id});
+  socket.emit('typing-stop',{channelId:chId});
 }
 
 // ── Typing ─────────────────────────────────────────────────
@@ -812,16 +829,16 @@ document.addEventListener('DOMContentLoaded',()=>{
   inp.addEventListener('keydown',e=>{
     if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMsg();return;}
     if(currentChannel){
-      socket.emit('typing-start',{channelId:currentChannel._id});
-      clearTimeout(typingTimeout);
-      typingTimeout=setTimeout(()=>socket.emit('typing-stop',{channelId:currentChannel._id}),3000);
+      const chIdT=_chId();
+      if(chIdT){socket.emit('typing-start',{channelId:chIdT});clearTimeout(typingTimeout);typingTimeout=setTimeout(()=>socket.emit('typing-stop',{channelId:chIdT}),3000);}
     }
   });
   inp.addEventListener('input',()=>{inp.style.height='auto';inp.style.height=Math.min(inp.scrollHeight,120)+'px';});
 });
 
 socket.on('typing',({userId,username,channelId})=>{
-  if(channelId!==currentChannel?._id||userId===myUser?.id) return;
+  const myChIdT=currentChannel?._id||currentChannel?.id;
+  if(String(channelId)!==String(myChIdT)||userId===myUser?.id) return;
   if(!typingUsers[channelId]) typingUsers[channelId]={};
   typingUsers[channelId][userId]={username};
   updateTypingBar();
@@ -833,7 +850,7 @@ socket.on('typing-stop',({userId,channelId})=>{
 function updateTypingBar(){
   const bar=document.getElementById('typing-bar');
   const el=document.getElementById('typing-text');
-  const ch=currentChannel?._id;
+  const ch=String(currentChannel?._id||currentChannel?.id||'');
   if(!ch||!typingUsers[ch]){bar.style.display='none';return;}
   const names=Object.values(typingUsers[ch]||{}).map(u=>u.username);
   if(!names.length){bar.style.display='none';return;}
@@ -1136,26 +1153,32 @@ async function createPC(peerId,init){
 let ytReady_wp=false;
 function onYouTubeIframeAPIReady(){ytReady_wp=true;}
 
-function openWatchModal(){if(!currentChannel){alert('Selecciona un canal primero.');return;}openModal('watch-modal');}
+function openWatchModal(){
+  if(!_chId()) return; // sin canal seleccionado, no abrir
+  openModal('watch-modal');
+  setTimeout(()=>document.getElementById('watch-url-input')?.focus(),200);
+}
 function startWatchParty(){
   const url=document.getElementById('watch-url-input').value.trim();
-  if(!url||!currentChannel) return;
-  socket.emit('watch-start',{channelId:currentChannel._id,url,type:'youtube'});
+  if(!url) return;
+  const chId = currentChannel?._id || currentChannel?.id;
+  if(!chId){closeModal('watch-modal');return;}
+  socket.emit('watch-start',{channelId:chId, url, type:'youtube'});
   closeModal('watch-modal');
   document.getElementById('watch-url-input').value='';
 }
 
 socket.on('watch-state',({channelId,active,type,videoId,url,title,playing,currentTime,lastSync,startedBy})=>{
-  if(channelId!==currentChannel?._id) return;
+  const myChId = currentChannel?._id||currentChannel?.id;
+  if(channelId && myChId && String(channelId)!==String(myChId)) return;
   if(!active){if(wpActive)leaveWatchPartyLocal();return;}
   const isNew=!wpActive||wpCurrentVid!==videoId||wpCurrentType!==type;
   wpActive=true;wpCurrentVid=videoId;wpPlaying=playing;wpCurrentType=type;
   const elapsed=playing?(Date.now()-lastSync)/1000:0;
   const syncTime=Math.max(0,(currentTime||0)+elapsed);
   ['wp-title-top','wp-title-bar'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=title||'Watch Party';});
-  document.getElementById('wp-btn').classList.add('live');
-  document.getElementById('wp-btn').textContent='🔴 LIVE';
-  if(document.getElementById('mob-wp-btn'))document.getElementById('mob-wp-btn').textContent='🔴';
+  const wpb=document.getElementById('wp-btn');if(wpb){wpb.classList.add('live');wpb.textContent='🔴 LIVE';}
+  const mwpb=document.getElementById('mob-wp-btn');if(mwpb)mwpb.textContent='🔴';
   updateWpBtns();
   if(isNew){
     if(type==='iframe') createIframeWp(url);
@@ -1167,74 +1190,169 @@ socket.on('watch-state',({channelId,active,type,videoId,url,title,playing,curren
 });
 
 socket.on('watch-cmd',({channelId,action,currentTime})=>{
-  if(channelId!==currentChannel?._id||wpCurrentType==='iframe') return;
+  const myChId=currentChannel?._id||currentChannel?.id;
+  if(channelId&&myChId&&String(channelId)!==String(myChId)) return;
+  if(wpCurrentType==='iframe') return;
   wpPlaying=(action==='play'||action==='sync-play');
   updateWpBtns();
   applyWpCmd(action,currentTime);
 });
 
-function createYtWp(videoId,startTime,shouldPlay){
-  wpCurrentVid=videoId;wpPlayerReady=false;wpPendingPlay=shouldPlay;wpPendingTime=startTime||0;wpIgnoreEvents=true;
-  if(wpPlayer){try{wpPlayer.destroy();}catch(e){}wpPlayer=null;}
+// ── WATCH PARTY PLAYER ────────────────────────────────────
+// En móvil: iframe de YouTube con enablejsapi=1 + postMessage para control
+// En desktop: YT.Player API completa
+
+let _wpIframe = null; // referencia al iframe en móvil
+
+function _chId(){ return currentChannel?._id || currentChannel?.id || null; }
+
+function createYtWp(videoId, startTime, shouldPlay){
+  wpCurrentVid=videoId; wpPlayerReady=false;
+  wpPendingPlay=shouldPlay; wpPendingTime=startTime||0; wpIgnoreEvents=true;
+  if(wpPlayer){try{wpPlayer.destroy();}catch(e){} wpPlayer=null;}
+  _wpIframe=null;
+
   const wrap=document.getElementById('yt-wrap');
   wrap.innerHTML='';
-  const isMob=window.innerWidth<=768;
+
+  const isMob = window.innerWidth <= 768;
+
   if(isMob){
+    // Iframe con enablejsapi=1 — permite postMessage para play/pause/seek
     const fr=document.createElement('iframe');
+    fr.id='wp-mob-iframe';
     fr.style.cssText='position:absolute;inset:0;width:100%;height:100%;border:none;';
-    fr.setAttribute('allowfullscreen','');fr.setAttribute('allow','autoplay;fullscreen;encrypted-media');
-    fr.src=`https://www.youtube.com/embed/${videoId}?autoplay=1&controls=1&playsinline=1&start=${Math.floor(startTime||0)}&rel=0`;
-    wrap.appendChild(fr);wpPlayerReady=true;wpIgnoreEvents=false;return;
+    fr.setAttribute('allowfullscreen','');
+    fr.setAttribute('allow','autoplay; fullscreen; encrypted-media; picture-in-picture');
+    const start=Math.floor(startTime||0);
+    fr.src=`https://www.youtube.com/embed/${videoId}?autoplay=1&controls=1&playsinline=1&start=${start}&rel=0&enablejsapi=1&origin=${encodeURIComponent(location.origin)}`;
+    wrap.appendChild(fr);
+    _wpIframe=fr;
+    wpPlayerReady=true;
+    wpIgnoreEvents=false;
+    wpPlaying=shouldPlay;
+    updateWpBtns();
+    return;
   }
-  const div=document.createElement('div');div.id='wpyt';div.style.cssText='position:absolute;inset:0;width:100%;height:100%;';
+
+  // Desktop: YT.Player API
+  const div=document.createElement('div');
+  div.id='wpyt';
+  div.style.cssText='position:absolute;inset:0;width:100%;height:100%;';
   wrap.appendChild(div);
-  if(!ytReady_wp){setTimeout(()=>createYtWp(videoId,startTime,shouldPlay),500);return;}
-  wpPlayer=new YT.Player('wpyt',{width:'100%',height:'100%',videoId,
+  if(!ytReady_wp){ setTimeout(()=>createYtWp(videoId,startTime,shouldPlay),500); return; }
+  wpPlayer=new YT.Player('wpyt',{
+    width:'100%',height:'100%',videoId,
     playerVars:{autoplay:1,controls:1,rel:0,playsinline:1,fs:1,start:Math.floor(startTime||0),origin:location.origin},
     events:{
-      onReady(e){wpPlayerReady=true;wpIgnoreEvents=false;if(wpPendingTime>1)e.target.seekTo(wpPendingTime,true);if(wpPendingPlay)e.target.playVideo();wpPendingPlay=false;},
+      onReady(e){
+        wpPlayerReady=true;wpIgnoreEvents=false;
+        if(wpPendingTime>1) e.target.seekTo(wpPendingTime,true);
+        if(wpPendingPlay) e.target.playVideo();
+        wpPendingPlay=false;
+      },
       onStateChange(e){
         if(wpIgnoreEvents) return;
-        if(e.data===YT.PlayerState.PAUSED&&wpPlaying){wpPlaying=false;updateWpBtns();socket.emit('watch-pause',{channelId:currentChannel?._id,currentTime:safeWpTime()});}
-        if(e.data===YT.PlayerState.PLAYING&&!wpPlaying){wpPlaying=true;updateWpBtns();socket.emit('watch-play',{channelId:currentChannel?._id,currentTime:safeWpTime()});}
+        if(e.data===YT.PlayerState.PAUSED && wpPlaying){
+          wpPlaying=false; updateWpBtns();
+          socket.emit('watch-pause',{channelId:_chId(),currentTime:safeWpTime()});
+        }
+        if(e.data===YT.PlayerState.PLAYING && !wpPlaying){
+          wpPlaying=true; updateWpBtns();
+          socket.emit('watch-play',{channelId:_chId(),currentTime:safeWpTime()});
+        }
       }
     }
   });
 }
 
+// Controlar iframe móvil via postMessage (YouTube IFrame API)
+function _iframeCmd(func, args){
+  if(!_wpIframe) return;
+  try{
+    _wpIframe.contentWindow.postMessage(JSON.stringify({event:'command',func,args:args||[]}), '*');
+  }catch(e){}
+}
+
 function createIframeWp(url){
-  wpPlayerReady=true;
+  wpPlayerReady=true; _wpIframe=null;
+  if(wpPlayer){try{wpPlayer.destroy();}catch(e){} wpPlayer=null;}
   const wrap=document.getElementById('yt-wrap');
   wrap.innerHTML=`<iframe src="${url}" style="position:absolute;inset:0;width:100%;height:100%;border:none;" allowfullscreen allow="fullscreen;autoplay;encrypted-media" sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-presentation"></iframe>`;
+  // Ocultar controles de play/pause para iframe externo
   document.getElementById('watch-controls').style.display='none';
 }
 
-function applyWpCmd(action,currentTime){
-  if(!wpPlayer||!wpPlayerReady){wpPendingTime=currentTime||0;wpPendingPlay=(action==='play'||action==='sync-play');return;}
+function applyWpCmd(action, currentTime){
+  const isPlay = action==='play' || action==='sync-play';
+  wpPlaying = isPlay;
+  updateWpBtns();
+
+  if(_wpIframe){
+    // Móvil: controlar via postMessage
+    const seekTo = isPlay ? (currentTime||0)+0.4 : (currentTime||0);
+    _iframeCmd('seekTo',[seekTo,true]);
+    setTimeout(()=>_iframeCmd(isPlay?'playVideo':'pauseVideo',[]),200);
+    return;
+  }
+
+  if(!wpPlayer||!wpPlayerReady){
+    wpPendingTime=currentTime||0;
+    wpPendingPlay=isPlay;
+    return;
+  }
   wpIgnoreEvents=true;
-  if(action==='play'||action==='sync-play'){try{wpPlayer.seekTo(currentTime+0.3,true);wpPlayer.playVideo();}catch(e){}}
-  else{try{wpPlayer.pauseVideo();wpPlayer.seekTo(currentTime,true);}catch(e){}}
-  setTimeout(()=>wpIgnoreEvents=false,600);
+  if(isPlay){
+    try{wpPlayer.seekTo((currentTime||0)+0.3,true);wpPlayer.playVideo();}catch(e){}
+  }else{
+    try{wpPlayer.pauseVideo();wpPlayer.seekTo(currentTime||0,true);}catch(e){}
+  }
+  setTimeout(()=>{wpIgnoreEvents=false;},600);
 }
-function safeWpTime(){try{return wpPlayer&&wpPlayerReady?wpPlayer.getCurrentTime():0;}catch(e){return 0;}}
-function updateWpBtns(){const l=wpPlaying?'⏸ Pausar':'▶ Play';['wp-play-btn','wp-play-btn2'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=l;});}
+
+function safeWpTime(){
+  if(_wpIframe) return 0; // no podemos leer el tiempo del iframe móvil sin YT API
+  try{return wpPlayer&&wpPlayerReady?wpPlayer.getCurrentTime():0;}catch(e){return 0;}
+}
+
+function updateWpBtns(){
+  const l=wpPlaying?'⏸ Pausar':'▶ Play';
+  ['wp-play-btn','wp-play-btn2'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=l;});
+}
+
 function wpTogglePlay(){
   if(wpCurrentType==='iframe') return;
   const t=safeWpTime();
-  if(wpPlaying) socket.emit('watch-pause',{channelId:currentChannel?._id,currentTime:t});
-  else socket.emit('watch-play',{channelId:currentChannel?._id,currentTime:t});
+  if(wpPlaying) socket.emit('watch-pause',{channelId:_chId(),currentTime:t});
+  else          socket.emit('watch-play', {channelId:_chId(),currentTime:t});
 }
-function requestSync(){socket.emit('watch-sync-request',{channelId:currentChannel?._id});}
-function leaveWatchParty(){socket.emit('watch-stop',{channelId:currentChannel?._id});leaveWatchPartyLocal();}
+
+function requestSync(){
+  socket.emit('watch-sync-request',{channelId:_chId()});
+}
+
+function leaveWatchParty(){
+  socket.emit('watch-stop',{channelId:_chId()});
+  leaveWatchPartyLocal();
+}
+
 function leaveWatchPartyLocal(){
-  wpActive=false;wpCurrentVid=null;wpPlaying=false;wpCurrentType='youtube';
-  if(wpPlayer){try{wpPlayer.destroy();}catch(e){}wpPlayer=null;wpPlayerReady=false;}
-  const wrap=document.getElementById('yt-wrap');if(wrap)wrap.innerHTML='';
-  document.getElementById('watch-controls').style.display='flex';
-  document.getElementById('wp-btn').classList.remove('live');
-  document.getElementById('wp-btn').textContent='🎬 Watch Party';
-  if(document.getElementById('mob-wp-btn'))document.getElementById('mob-wp-btn').textContent='🎬';
-  showView('chat');
+  wpActive=false; wpCurrentVid=null; wpPlaying=false; wpCurrentType='youtube';
+  _wpIframe=null;
+  if(wpPlayer){try{wpPlayer.destroy();}catch(e){} wpPlayer=null; wpPlayerReady=false;}
+  const wrap=document.getElementById('yt-wrap');
+  if(wrap) wrap.innerHTML='';
+  // Restaurar controles siempre
+  const wc=document.getElementById('watch-controls');
+  if(wc) wc.style.display='flex';
+  // Restaurar botón WP
+  const wpb=document.getElementById('wp-btn');
+  if(wpb){wpb.classList.remove('live');wpb.textContent='🎬 Watch Party';}
+  const mwpb=document.getElementById('mob-wp-btn');
+  if(mwpb) mwpb.textContent='🎬';
+  // Volver al chat — si no hay canal mostrar welcome
+  if(currentChannel) showView('chat');
+  else showView('welcome');
 }
 
 // ── Music ──────────────────────────────────────────────────
@@ -1263,7 +1381,8 @@ document.addEventListener('visibilitychange',()=>{
 });
 
 socket.on('music-play',song=>{
-  if(song.channelId!==currentChannel?._id) return;
+  const myChId2=currentChannel?._id||currentChannel?.id;
+  if(song.channelId&&myChId2&&String(song.channelId)!==String(myChId2)) return;
   document.getElementById('music-bar').classList.add('active');
   document.getElementById('music-title').textContent=song.title;
   document.getElementById('music-req').textContent=`pedida por ${song.requestedBy}`;
@@ -1272,7 +1391,8 @@ socket.on('music-play',song=>{
   loadSongBg(song);
 });
 socket.on('music-state',s=>{
-  if(s.channelId!==currentChannel?._id) return;
+  const myChId3=currentChannel?._id||currentChannel?.id;
+  if(s.channelId&&myChId3&&String(s.channelId)!==String(myChId3)) return;
   if(s.current){
     document.getElementById('music-bar').classList.add('active');
     document.getElementById('music-title').textContent=s.current.title;
@@ -1345,8 +1465,17 @@ function showView(v){
 }
 
 // ── Sidebar mobile ─────────────────────────────────────────
-function toggleSidebar(){document.getElementById('ch-sidebar').classList.toggle('open');document.getElementById('mob-overlay').classList.toggle('open');}
-function closeSidebar(){document.getElementById('ch-sidebar').classList.remove('open');document.getElementById('mob-overlay').classList.remove('open');}
+function toggleSidebar(){
+  const open=!document.getElementById('ch-sidebar').classList.contains('open');
+  document.getElementById('ch-sidebar').classList.toggle('open',open);
+  document.getElementById('srv-sidebar').classList.toggle('open',open);
+  document.getElementById('mob-overlay').classList.toggle('open',open);
+}
+function closeSidebar(){
+  document.getElementById('ch-sidebar').classList.remove('open');
+  document.getElementById('srv-sidebar').classList.remove('open');
+  document.getElementById('mob-overlay').classList.remove('open');
+}
 
 // ── Modals ─────────────────────────────────────────────────
 function openModal(id){document.getElementById(id).classList.add('open');}
