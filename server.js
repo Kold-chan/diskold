@@ -130,7 +130,6 @@ const users      = {};
 const voiceRooms = {};
 
 io.on('connection', socket => {
-io.on('connection', socket => {
 
   socket.on('auth', token => {
     const s=sessions[token];
@@ -365,4 +364,4 @@ server.listen(PORT,()=>{
   console.log(`║  DISKOLD v3.3  by Kold               ║`);
   console.log(`║  http://localhost:${PORT}              ║`);
   console.log(`╚══════════════════════════════════════╝\n`);
-});
+})
