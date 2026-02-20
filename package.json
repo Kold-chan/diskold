@@ -1,26 +1,19 @@
 {
   "name": "diskold",
-  "version": "3.0.0",
-  "description": "Diskold — Chat, voz, música y Watch Party. Creado por Kold.",
+  "version": "4.0.0",
+  "description": "Diskold — Discord-like app by Kold",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "npx nodemon server.js",
-    "electron": "electron .",
-    "build:exe": "electron-builder --win"
-  },
-  "build": {
-    "appId": "com.kold.diskold",
-    "productName": "Diskold",
-    "win": { "target": "nsis", "icon": "public/icon-512.png" }
+    "dev": "npx nodemon server.js"
   },
   "dependencies": {
     "express": "^4.18.2",
-    "socket.io": "^4.6.1"
-  },
-  "devDependencies": {
-    "electron": "^28.0.0",
-    "electron-builder": "^24.0.0"
+    "socket.io": "^4.6.1",
+    "mongoose": "^8.0.0",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2",
+    "nanoid": "^3.3.7"
   },
   "author": "Kold",
   "license": "MIT"
