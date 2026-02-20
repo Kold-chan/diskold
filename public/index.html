@@ -740,7 +740,10 @@ async function selectServer(srvId){
   document.querySelectorAll('.srv-btn').forEach(b=>b.classList.remove('active'));
   $(`sb-${srvId}`)?.classList.add('active');
   $('v-dm-panel').style.display='none';
-  showView('welcome');
+  // Auto-entrar al primer canal de texto
+  const firstText=currentServer.channels.find(c=>c.type==='text');
+  if(firstText) selectChannel(String(firstText._id));
+  else showView('welcome');
 }
 function renderChSidebar(){
   if(!currentServer)return;
