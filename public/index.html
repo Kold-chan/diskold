@@ -510,6 +510,7 @@
           <div class="cmd-suggestions" id="cmd-suggestions">
             <div class="cmd-item" onclick="insertCmd('/play ')"><span class="cmd-name">/play</span><span>Reproducir música</span></div>
             <div class="cmd-item" onclick="insertCmd('/watch ')"><span class="cmd-name">/watch</span><span>Watch Party con URL de YouTube</span></div>
+            <div class="cmd-item" onclick="insertCmd('/partydo')"><span class="cmd-name">/partydo</span><span>⚽ Ver fútbol libre juntos</span></div>
             <div class="cmd-item" onclick="insertCmd('/skip')"><span class="cmd-name">/skip</span><span>Saltar canción</span></div>
             <div class="cmd-item" onclick="insertCmd('/stop')"><span class="cmd-name">/stop</span><span>Detener música</span></div>
             <div class="cmd-item" onclick="insertCmd('/pause')"><span class="cmd-name">/pause</span><span>Pausar</span></div>
@@ -997,14 +998,16 @@ document.getElementById('watch-url-input').addEventListener('keydown',e=>e.key==
 function startWatchParty(){
   const url=document.getElementById('watch-url-input').value.trim();
   if(!url){alert('Pega un link de YouTube.');return;}
-  socket.emit('watch-start',{url});
+  // Asegurarse de estar en el canal antes de emitir
+  if(!myChannel){alert('Primero entra a un canal de texto.');return;}
+  socket.emit('watch-start',{url, type:'youtube'});
   closeWatchModal();
   document.getElementById('watch-url-input').value='';
 }
 
 // ── WATCH PARTY PLAYER ───────────────────────────────────
 let wpPlayer=null, wpPlayerReady=false;
-let wpPendingPlay=false, wpPendingTime=0, wpCurrentVid=null;
+let wpPendingPlay=false, wpPendingTime=0, wpCurrentVid=null, wpCurrentType='youtube';
 let wpIgnoreEvents=false;
 
 function createWpPlayer(videoId, startTime, shouldPlay){
@@ -1021,11 +1024,16 @@ function createWpPlayer(videoId, startTime, shouldPlay){
   div.style.cssText='position:absolute;inset:0;width:100%;height:100%;';
   wrap.appendChild(div);
 
-  if(!ytReady) return; // se creará cuando ytReady dispare
+  if(!ytReady) return;
 
   wpPlayer=new YT.Player('wp-yt-div',{
     width:'100%', height:'100%', videoId:videoId,
-    playerVars:{ autoplay:0, controls:1, rel:0, modestbranding:1, playsinline:1, origin:location.origin },
+    playerVars:{
+      autoplay:0, controls:1, rel:0, modestbranding:1,
+      playsinline:1,          // iOS: no forzar fullscreen nativo
+      fs:1,                   // Habilitar botón fullscreen
+      origin:location.origin,
+    },
     events:{
       onReady(e){
         wpPlayerReady=true; wpIgnoreEvents=false;
@@ -1035,7 +1043,6 @@ function createWpPlayer(videoId, startTime, shouldPlay){
       },
       onStateChange(e){
         if(wpIgnoreEvents) return;
-        // El usuario pausó/dio play directamente en el player → sincronizar a todos
         if(e.data===YT.PlayerState.PAUSED && wpPlaying){
           wpPlaying=false; updateWpButtons();
           socket.emit('watch-pause',{currentTime:safeGetTime(),channel:myChannel});
@@ -1047,6 +1054,21 @@ function createWpPlayer(videoId, startTime, shouldPlay){
       }
     }
   });
+}
+
+// Cargar iframe genérico (fútbol libre, etc.)
+function createIframePlayer(url){
+  wpPlayerReady=true; wpCurrentVid=null;
+  if(wpPlayer){ try{wpPlayer.destroy();}catch(e){} wpPlayer=null; }
+  const wrap=document.getElementById('yt-embed-wrap');
+  wrap.innerHTML=`
+    <iframe
+      src="${url}"
+      style="position:absolute;inset:0;width:100%;height:100%;border:none;"
+      allowfullscreen
+      allow="fullscreen; autoplay; encrypted-media"
+      sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-presentation"
+    ></iframe>`;
 }
 
 function wpCmd(fn,arg){
@@ -1061,12 +1083,12 @@ function updateWpButtons(){
   ['wp-play-btn','mob-play-btn'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=label;});
 }
 
-// ── WATCH-STATE: nuevo video o llegada al canal ───────────
+// ── WATCH-STATE ───────────────────────────────────────────
 socket.on('watch-state',state=>{
   if(!state.active){ if(wpActive)leaveWatchPartyLocal(); return; }
 
-  const isNew=!wpActive||wpCurrentVid!==state.videoId;
-  wpActive=true; wpVideoId=state.videoId; wpPlaying=state.playing;
+  const isNew=!wpActive || wpCurrentVid!==state.videoId || wpCurrentType!==state.type;
+  wpActive=true; wpVideoId=state.videoId; wpPlaying=state.playing; wpCurrentType=state.type||'youtube';
 
   const elapsed=state.playing?(Date.now()-state.lastSync)/1000:0;
   const syncTime=Math.max(0,(state.currentTime||0)+elapsed);
@@ -1076,47 +1098,54 @@ socket.on('watch-state',state=>{
     const el=document.getElementById(id);if(el)el.textContent=title;
   });
   const mobBy=document.getElementById('mob-watch-by');
-  if(mobBy)mobBy.textContent=state.startedBy?`Iniciada por ${state.startedBy}`:'';
+  if(mobBy)mobBy.textContent=state.startedBy?`Por ${state.startedBy}`:'';
 
   document.getElementById('watch-party-btn').classList.add('live');
   document.getElementById('watch-party-btn').innerHTML='<div class="watch-dot"></div> LIVE';
   updateWpButtons();
 
   if(isNew){
-    createWpPlayer(state.videoId,syncTime,state.playing);
-  } else {
-    // Mismo video: solo sincronizar
+    if(state.type==='iframe'){
+      createIframePlayer(state.url);
+      // Ocultar controles de play/pause para iframe (no podemos controlar el iframe)
+      ['watch-controls','mob-play-btn'].forEach(id=>{
+        const el=document.getElementById(id);
+        if(el) el.style.display='none';
+      });
+    } else {
+      // Restaurar controles
+      const wc=document.getElementById('watch-controls');
+      if(wc) wc.style.display='flex';
+      const mpb=document.getElementById('mob-play-btn');
+      if(mpb) mpb.style.display='';
+      createWpPlayer(state.videoId,syncTime,state.playing);
+    }
+  } else if(state.type!=='iframe'){
     applyWpCmd(state.playing?'sync-play':'sync-pause',syncTime);
   }
   showWatchView();
 });
 
-// ── WATCH-CMD: play/pause/sync unificado para TODOS ───────
+// ── WATCH-CMD ─────────────────────────────────────────────
 socket.on('watch-cmd',({action,currentTime})=>{
+  if(wpCurrentType==='iframe') return; // iframe no se puede controlar
   switch(action){
-    case 'play':
-    case 'sync-play':
-      wpPlaying=true; updateWpButtons();
-      applyWpCmd('play',currentTime);
-      break;
-    case 'pause':
-    case 'sync-pause':
-      wpPlaying=false; updateWpButtons();
-      applyWpCmd('pause',currentTime);
-      break;
+    case 'play': case 'sync-play':
+      wpPlaying=true; updateWpButtons(); applyWpCmd('play',currentTime); break;
+    case 'pause': case 'sync-pause':
+      wpPlaying=false; updateWpButtons(); applyWpCmd('pause',currentTime); break;
   }
 });
 
 function applyWpCmd(action,currentTime){
   if(!wpPlayer||!wpPlayerReady){
-    // Player no listo: guardar pendiente
     wpPendingTime=currentTime||0;
     wpPendingPlay=(action==='play'||action==='sync-play');
     return;
   }
   wpIgnoreEvents=true;
   if(action==='play'||action==='sync-play'){
-    wpCmd('seekTo',currentTime+0.3); // compensar latencia
+    wpCmd('seekTo',currentTime+0.3);
     wpCmd('playVideo');
   } else {
     wpCmd('pauseVideo');
@@ -1127,8 +1156,8 @@ function applyWpCmd(action,currentTime){
 
 socket.on('watch-error',msg=>alert('Watch Party: '+msg));
 
-// Botón Play/Pausa
 function wpTogglePlay(){
+  if(wpCurrentType==='iframe') return;
   if(!wpPlayer||!wpPlayerReady){
     if(wpCurrentVid) createWpPlayer(wpCurrentVid,wpPendingTime,true);
     return;
@@ -1138,7 +1167,6 @@ function wpTogglePlay(){
   else          socket.emit('watch-play', {currentTime:t,channel:myChannel});
 }
 
-// Sincronizar — fuerza sync a TODOS en el canal
 function requestSync(){ socket.emit('watch-sync-request',{channel:myChannel}); }
 
 function leaveWatchParty(){
@@ -1147,11 +1175,14 @@ function leaveWatchParty(){
 }
 
 function leaveWatchPartyLocal(){
-  wpActive=false;wpVideoId=null;wpPlaying=false;wpCurrentVid=null;
+  wpActive=false;wpVideoId=null;wpPlaying=false;wpCurrentVid=null;wpCurrentType='youtube';
   wpIgnoreEvents=true;
   if(wpPlayer){try{wpPlayer.destroy();}catch(e){}wpPlayer=null;wpPlayerReady=false;}
   const wrap=document.getElementById('yt-embed-wrap');
   if(wrap)wrap.innerHTML='';
+  // Restaurar controles
+  const wc=document.getElementById('watch-controls'); if(wc) wc.style.display='flex';
+  const mpb=document.getElementById('mob-play-btn'); if(mpb) mpb.style.display='';
   document.getElementById('watch-party-btn').classList.remove('live');
   document.getElementById('watch-party-btn').innerHTML='🎬 Watch Party';
   showChat();
@@ -1255,6 +1286,8 @@ document.addEventListener('visibilitychange', () => {
 });
 
 socket.on('music-play', song => {
+  // Solo procesar si es de mi canal
+  if(song.channel && song.channel !== myChannel) return;
   document.getElementById('music-player').classList.add('active');
   document.getElementById('music-title').textContent  = song.title;
   document.getElementById('music-req').textContent    = `pedida por ${song.requestedBy}`;
@@ -1265,41 +1298,51 @@ socket.on('music-play', song => {
 });
 
 socket.on('music-state', s => {
+  // Solo mi canal
+  if(s.channel && s.channel !== myChannel) return;
   if (s.current) {
     document.getElementById('music-player').classList.add('active');
     document.getElementById('music-title').textContent = s.current.title;
     document.getElementById('music-req').textContent   = `pedida por ${s.current.requestedBy}`;
     document.getElementById('music-thumb').src         = s.current.thumbnail;
     if (currentSongId !== s.current.videoId) loadSongBackground(s.current);
+  } else {
+    document.getElementById('music-player').classList.remove('active');
   }
   document.getElementById('vol-slider').value = s.volume;
   if (ytPlayer && ytPlayer.setVolume) ytPlayer.setVolume(s.volume);
 });
 
-socket.on('music-stop', () => {
+socket.on('music-stop', (data) => {
+  if(data && data.channel && data.channel !== myChannel) return;
   document.getElementById('music-player').classList.remove('active');
   clearInterval(progressInterval);
   if (ytPlayer && ytPlayer.stopVideo) ytPlayer.stopVideo();
   stopBgAudio();
 });
 
-socket.on('music-ended', () => {
+socket.on('music-ended', (data) => {
+  if(data && data.channel && data.channel !== myChannel) return;
   document.getElementById('music-player').classList.remove('active');
   clearInterval(progressInterval);
   stopBgAudio();
 });
 
-socket.on('music-pause', () => {
+socket.on('music-pause', (data) => {
+  if(data && data.channel && data.channel !== myChannel) return;
   document.getElementById('pause-btn').textContent = '▶';
   if (ytPlayer && ytPlayer.pauseVideo) ytPlayer.pauseVideo();
 });
 
-socket.on('music-resume', () => {
+socket.on('music-resume', (data) => {
+  if(data && data.channel && data.channel !== myChannel) return;
   document.getElementById('pause-btn').textContent = '⏸';
   if (ytPlayer && ytPlayer.playVideo) ytPlayer.playVideo();
 });
 
-socket.on('music-volume', v => {
+socket.on('music-volume', (data) => {
+  if(data && data.channel && data.channel !== myChannel) return;
+  const v = typeof data === 'number' ? data : data.v;
   document.getElementById('vol-slider').value = v;
   if (ytPlayer && ytPlayer.setVolume) ytPlayer.setVolume(v);
 });
@@ -1313,17 +1356,24 @@ function setVolume(v)  { socket.emit('bot-command', { command: `/volume ${v}` })
 const ICE = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 
 async function joinVoice(roomId) {
-  if (inVoice) leaveVoice(); // salir de sala anterior si había
+  if (inVoice) leaveVoice();
   try { localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false }); }
   catch(e) { alert('No se pudo acceder al micrófono.'); return; }
+  // Marcar estado ANTES de emitir para que Android no llegue al evento sin estado
+  inVoice = true;
+  currentVoiceRoom = roomId;
+  socket.emit('join-voice', roomId);
+  // UI — se confirma con 'voice-joined' del servidor
+}
+
+// Confirmación del servidor de que entramos a la sala
+socket.on('voice-joined', ({ roomId }) => {
   inVoice = true;
   currentVoiceRoom = roomId;
   document.getElementById('call-status').classList.add('on');
   document.getElementById('call-room-label').textContent = roomId;
   document.getElementById('voice-leave-btn').style.display = 'flex';
-  socket.emit('join-voice', roomId);
-  renderVoiceChannels();
-}
+});
 
 function leaveVoice() {
   inVoice = false;
@@ -1335,7 +1385,6 @@ function leaveVoice() {
   document.getElementById('call-status').classList.remove('on');
   document.getElementById('voice-leave-btn').style.display = 'none';
   socket.emit('leave-voice');
-  renderVoiceChannels();
 }
 
 function toggleMic() {
