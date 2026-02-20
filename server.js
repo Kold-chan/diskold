@@ -130,41 +130,34 @@ const users      = {};
 const voiceRooms = {};
 
 io.on('connection', socket => {
+io.on('connection', socket => {
 
   socket.on('auth', token => {
     const s=sessions[token];
     if(!s){socket.emit('auth-error','Sesión inválida.');return;}
-    const defaultCh=Object.keys(CHANNELS)[0];
-    users[socket.id]={username:s.username, avatar:s.avatar, channel:defaultCh};
-    socket.join('ch:'+defaultCh);
+    // NO asignar canal automáticamente — el cliente debe elegir con contraseña
+    users[socket.id]={username:s.username, avatar:s.avatar, channel:null};
     io.emit('user-list',buildUserList());
-    socket.to('ch:'+defaultCh).emit('chat-message',{system:true,text:`${s.username} entró a Diskold`,time:now()});
     socket.emit('auth-ok',s);
-    // Enviar estado de música del canal por defecto
-    socket.emit('music-state',{...getMb(defaultCh), channel:defaultCh});
-    // Enviar watch party del canal
-    const wp=getWp(defaultCh);
-    if(wp.playing){wp.currentTime=calcCurrentTime(wp);wp.lastSync=Date.now();}
-    socket.emit('watch-state',{...wp,channel:defaultCh});
-    // Confirmar canal
-    socket.emit('channel-joined',{channel:defaultCh});
+    // Pedir al cliente que elija canal
+    socket.emit('need-channel');
   });
 
   socket.on('join-channel',({channel})=>{
     if(!users[socket.id]||!CHANNELS[channel]) return;
     const prev=users[socket.id].channel;
     if(prev===channel){
-      // Reenviar estado actual aunque ya esté en el canal (fix bug Android)
       socket.emit('channel-joined',{channel});
       return;
     }
-    socket.leave('ch:'+prev);
-    socket.to('ch:'+prev).emit('chat-message',{system:true,text:`${users[socket.id].username} salió del canal`,time:now()});
+    if(prev) {
+      socket.leave('ch:'+prev);
+      socket.to('ch:'+prev).emit('chat-message',{system:true,text:`${users[socket.id].username} salió del canal`,time:now()});
+    }
     users[socket.id].channel=channel;
     socket.join('ch:'+channel);
-    socket.to('ch:'+channel).emit('chat-message',{system:true,text:`${users[socket.id].username} entró al canal`,time:now()});
     io.emit('user-list',buildUserList());
-    // Enviar estado del canal nuevo
+    socket.to('ch:'+channel).emit('chat-message',{system:true,text:`${users[socket.id].username} entró al canal`,time:now()});
     socket.emit('music-state',{...getMb(channel),channel});
     const wp=getWp(channel);
     if(wp.playing){wp.currentTime=calcCurrentTime(wp);wp.lastSync=Date.now();}
@@ -331,7 +324,7 @@ async function handleBotCommand(socket, username, channel, text){
     }
     case '/partydo':{
       const wp=getWp(channel);
-      wp.active=true;wp.type='iframe';wp.url='https://www.futbollibre.net';wp.videoId=null;
+      wp.active=true;wp.type='iframe';wp.url='https://librefutboltv.su/home1/';wp.videoId=null;
       wp.title='⚽ Fútbol Libre';wp.playing=true;wp.currentTime=0;
       wp.startedBy=username;wp.lastSync=Date.now();
       io.to('ch:'+channel).emit('watch-state',{...wp,channel});

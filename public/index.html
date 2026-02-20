@@ -755,6 +755,33 @@ async function doLogin(){
   enterApp(data);
 }
 
+// ── SONIDOS DE SISTEMA ────────────────────────────────────
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let audioCtx = null;
+function getAudioCtx(){
+  if(!audioCtx) audioCtx = new AudioCtx();
+  if(audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+function playBeep(freq=440, dur=0.12, vol=0.18, type='sine'){
+  try{
+    const ctx=getAudioCtx();
+    const osc=ctx.createOscillator();
+    const gain=ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.type=type; osc.frequency.value=freq;
+    gain.gain.setValueAtTime(vol,ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+dur);
+    osc.start(ctx.currentTime); osc.stop(ctx.currentTime+dur);
+  }catch(e){}
+}
+// Sonidos específicos
+function sndJoin()  { playBeep(880,0.08,0.12); setTimeout(()=>playBeep(1100,0.1,0.12),90); }
+function sndLeave() { playBeep(660,0.08,0.12); setTimeout(()=>playBeep(440,0.1,0.12),90); }
+function sndMute()  { playBeep(300,0.15,0.10,'square'); }
+function sndUnmute(){ playBeep(600,0.08,0.10); setTimeout(()=>playBeep(800,0.08,0.10),80); }
+function sndMsg()   { playBeep(1200,0.06,0.08); }
+
 function enterApp(data){
   myToken=data.token; myName=data.username; myAvatar=data.avatar;
   localStorage.setItem('diskold_token',myToken);
@@ -765,6 +792,28 @@ function enterApp(data){
   updateTopbarAvatar();
   socket.emit('auth',myToken);
   requestWakeLock();
+}
+
+// El servidor pide que el cliente elija canal (no hay canal por defecto)
+socket.on('need-channel', () => {
+  // Mostrar el canal picker — simplemente abrir el sidebar y forzar selección
+  showChannelPicker();
+});
+
+function showChannelPicker(){
+  // Abrir sidebar para que el usuario elija canal
+  document.getElementById('sidebar').classList.add('open');
+  document.getElementById('sb-overlay').classList.add('open');
+  // Ocultar el chat hasta que elija
+  document.getElementById('chat-view').style.display='none';
+  // Mostrar mensaje en el área principal
+  const msgs=document.getElementById('messages');
+  msgs.innerHTML=`<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:12px;color:var(--muted);font-family:'Space Mono',monospace;font-size:.85rem;">
+    <div style="font-size:2rem;">🔒</div>
+    <div>Elige un canal para entrar</div>
+    <div style="font-size:.7rem;opacity:.6;">kbros · vcby</div>
+  </div>`;
+  document.getElementById('chat-view').style.display='flex';
 }
 
 // ── CANALES DE TEXTO ─────────────────────────────────────
@@ -1019,6 +1068,26 @@ function createWpPlayer(videoId, startTime, shouldPlay){
 
   const wrap=document.getElementById('yt-embed-wrap');
   wrap.innerHTML='';
+
+  // En Android/móvil: usar iframe directo de YouTube que SÍ funciona
+  // En desktop: usar YT.Player API para control de sync
+  if(isMobile()){
+    // Iframe directo — funciona en Android Chrome sin restricciones de autoplay
+    const startSecs = Math.floor(startTime||0);
+    const iframe = document.createElement('iframe');
+    iframe.id = 'wp-yt-iframe';
+    iframe.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:none;';
+    iframe.setAttribute('allowfullscreen','');
+    iframe.setAttribute('allow','autoplay; fullscreen; encrypted-media; picture-in-picture');
+    iframe.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&controls=1&rel=0&playsinline=1&start=${startSecs}&enablejsapi=1&origin=${encodeURIComponent(location.origin)}`;
+    wrap.appendChild(iframe);
+    // Marcar como listo (no tenemos API completa pero el video carga)
+    wpPlayerReady=true;
+    wpIgnoreEvents=false;
+    return;
+  }
+
+  // Desktop: YT.Player API completa
   const div=document.createElement('div');
   div.id='wp-yt-div';
   div.style.cssText='position:absolute;inset:0;width:100%;height:100%;';
@@ -1029,9 +1098,9 @@ function createWpPlayer(videoId, startTime, shouldPlay){
   wpPlayer=new YT.Player('wp-yt-div',{
     width:'100%', height:'100%', videoId:videoId,
     playerVars:{
-      autoplay:0, controls:1, rel:0, modestbranding:1,
-      playsinline:1,          // iOS: no forzar fullscreen nativo
-      fs:1,                   // Habilitar botón fullscreen
+      autoplay:1, controls:1, rel:0, modestbranding:1,
+      playsinline:1, fs:1,
+      start: Math.floor(startTime||0),
       origin:location.origin,
     },
     events:{
@@ -1366,13 +1435,25 @@ async function joinVoice(roomId) {
   // UI — se confirma con 'voice-joined' del servidor
 }
 
-// Confirmación del servidor de que entramos a la sala
 socket.on('voice-joined', ({ roomId }) => {
   inVoice = true;
   currentVoiceRoom = roomId;
   document.getElementById('call-status').classList.add('on');
   document.getElementById('call-room-label').textContent = roomId;
   document.getElementById('voice-leave-btn').style.display = 'flex';
+  sndJoin();
+});
+
+// Sonido cuando alguien entra/sale de voz
+socket.on('peer-joined', async ({ peerId }) => {
+  sndJoin();
+  await createPC(peerId, false);
+});
+
+socket.on('peer-left', id => {
+  sndLeave();
+  if(peers[id]){peers[id].close();delete peers[id];}
+  const a=document.getElementById('aud-'+id); if(a)a.remove();
 });
 
 function leaveVoice() {
@@ -1385,6 +1466,7 @@ function leaveVoice() {
   document.getElementById('call-status').classList.remove('on');
   document.getElementById('voice-leave-btn').style.display = 'none';
   socket.emit('leave-voice');
+  sndLeave();
 }
 
 function toggleMic() {
@@ -1394,11 +1476,10 @@ function toggleMic() {
   const b = document.getElementById('mic-btn');
   b.classList.toggle('off', micMuted);
   b.textContent = micMuted ? '🔇' : '🎤';
+  if(micMuted) sndMute(); else sndUnmute();
 }
 
 socket.on('existing-peers', async ids => { for (const id of ids) await createPC(id, true); });
-socket.on('peer-joined', async ({ peerId }) => await createPC(peerId, false));
-socket.on('peer-left', id => { if (peers[id]) { peers[id].close(); delete peers[id]; } const a = document.getElementById('aud-' + id); if (a) a.remove(); });
 socket.on('offer', async ({ from, offer }) => { if (!peers[from]) await createPC(from, false); await peers[from].setRemoteDescription(new RTCSessionDescription(offer)); const ans = await peers[from].createAnswer(); await peers[from].setLocalDescription(ans); socket.emit('answer', { to: from, answer: ans }); });
 socket.on('answer', async ({ from, answer }) => { if (peers[from]) await peers[from].setRemoteDescription(new RTCSessionDescription(answer)); });
 socket.on('ice-candidate', async ({ from, candidate }) => { if (peers[from] && candidate) try { await peers[from].addIceCandidate(new RTCIceCandidate(candidate)); } catch(e) {} });
