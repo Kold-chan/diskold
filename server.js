@@ -36,6 +36,57 @@ setInterval(() => {
   }
 }, 3600000);
 
+
+// ── Poll store ────────────────────────────────────────────
+// pollId → { question, options:[{text,votes:[userId]}], createdBy, channelId }
+const polls = new Map();
+
+// ── Pin store ─────────────────────────────────────────────
+// channelId → [{ msgId, content, authorName, pinnedBy, pinnedAt }]
+const pins = new Map();
+
+// ── Alarm store ───────────────────────────────────────────
+const alarms = new Map();
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, a] of alarms) {
+    if (a.triggerAt <= now) {
+      io.to('ch:'+a.channelId).emit('alarm-ring', { label:a.label, createdBy:a.createdBy });
+      alarms.delete(id);
+    }
+  }
+}, 5000);
+
+// ── Vibe meter ────────────────────────────────────────────
+const vibes = new Map();
+function getVibe(cid) {
+  if (!vibes.has(cid)) vibes.set(cid, { vibe:0, lastActivity:Date.now() });
+  const v = vibes.get(cid);
+  const decaySecs = (Date.now() - v.lastActivity) / 1000;
+  v.vibe = Math.max(0, v.vibe - Math.floor(decaySecs/30));
+  v.lastActivity = Date.now();
+  return v;
+}
+function bumpVibe(cid) {
+  const v = getVibe(cid);
+  v.vibe = Math.min(100, v.vibe + 3);
+  io.to('ch:'+cid).emit('vibe-update', { channelId:cid, vibe:v.vibe });
+}
+
+// ── Canvas/Draw store ─────────────────────────────────────
+const canvases = new Map();
+function getCanvas(cid) {
+  if (!canvases.has(cid)) canvases.set(cid, { strokes:[] });
+  return canvases.get(cid);
+}
+
+// ── Focus/Pomodoro ────────────────────────────────────────
+const focusSessions = new Map();
+
+// ── Partydo host ──────────────────────────────────────────
+// channelId → socketId of host
+const partydoHosts = {};
+
 // ── MongoDB ───────────────────────────────────────────────
 mongoose.connect(MONGODB_URI)
   .then(() => console.log('✅ MongoDB OK'))
@@ -348,6 +399,81 @@ app.get('/api/dms', async (req, res) => {
 // ── Invite landing page ───────────────────────────────────
 app.get('/invite/:code', (req, res) => res.sendFile(path.join(__dirname,'public','index.html')));
 
+// ── Channel snapshot (export chat as HTML) ────────────────
+app.get('/api/channels/:id/snapshot', async (req, res) => {
+  const msgs = await Message.find({ channel: req.params.id, deleted: false }).sort({ createdAt: 1 }).limit(200).lean();
+  const rows = msgs.map(m => `<div style="padding:6px 0;border-bottom:1px solid #222;"><span style="color:#a8d8ff;font-weight:700;">${m.authorName||'?'}</span> <span style="color:#555;font-size:.75em;">${new Date(m.createdAt).toLocaleString('es')}</span><br><span style="color:#e8eaf0;">${(m.content||'').replace(/</g,'&lt;')}</span></div>`).join('');
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Diskold Snapshot</title><style>body{background:#0a0a0c;color:#e8eaf0;font-family:sans-serif;max-width:700px;margin:0 auto;padding:20px;}h1{color:#a8d8ff;font-family:monospace;}</style></head><body><h1>📸 Diskold Snapshot</h1><p style="color:#555;">Exportado: ${new Date().toLocaleString('es')}</p>${rows}</body></html>`;
+  res.set('Content-Type','text/html');
+  res.set('Content-Disposition',`attachment; filename="snapshot-${req.params.id}.html"`);
+  res.send(html);
+});
+
+// ── Partydo view (iframe with adblock CSS injected) ───────
+app.get('/partydo-view', (req, res) => {
+  const adblockSelectors = [
+    '[class*="banner"],[id*="banner"]',
+    '[class*="popup"],[id*="popup"]',
+    '[class*="overlay"]:not(.video-overlay)',
+    '[class*="advertisement"],[class*="adsense"]',
+    '[class*="ad-container"],[class*="ad-wrap"]',
+    '[class*="sticky-ad"],[class*="floating-ad"]',
+    'ins.adsbygoogle',
+    'iframe[src*="doubleclick"]',
+    'iframe[src*="googlesyndication"]',
+    '[class*="cookie"],[id*="cookie"]',
+    '[class*="gdpr"],[class*="consent"]',
+    '[class*="subscribe-modal"],[id*="subscribe"]'
+  ].join(',');
+
+  const html = '<!DOCTYPE html><html><head><meta charset="UTF-8"/>' +
+    '<meta name="viewport" content="width=device-width,initial-scale=1"/>' +
+    '<style>' +
+    '* { box-sizing:border-box; margin:0; padding:0; }' +
+    'html,body { width:100%; height:100%; background:#000; overflow:hidden; }' +
+    'iframe#tv { width:100%; height:100%; border:none; display:block; }' +
+    '[class*="banner"],[id*="banner"],[class*="popup"],[id*="popup"],' +
+    '[class*="advertisement"],[class*="adsense"],[class*="ad-wrap"],' +
+    'ins.adsbygoogle,[class*="cookie-banner"],[class*="gdpr"]' +
+    '{ display:none!important; }' +
+    '</style></head><body>' +
+    '<iframe id="tv" src="https://librefutboltv.su/home1/"' +
+    ' allow="autoplay;fullscreen;encrypted-media"' +
+    ' allowfullscreen' +
+    ' sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-presentation allow-top-navigation-by-user-activation">' +
+    '</iframe>' +
+    '<script>' +
+    'var tv = document.getElementById("tv");' +
+    'var adSels = ' + JSON.stringify(adblockSelectors) + ';' +
+    'function killAds(doc) {' +
+    '  try {' +
+    '    doc.querySelectorAll(adSels).forEach(function(el){ el.style.cssText="display:none!important"; });' +
+    '    var all = doc.querySelectorAll("*");' +
+    '    for(var i=0;i<all.length;i++){' +
+    '      var el=all[i]; var st=window.getComputedStyle ? null : null;' +
+    '      var style=el.getAttribute("style")||"";' +
+    '      if((style.includes("position:fixed")||style.includes("position: fixed"))&&' +
+    '         el.tagName!=="VIDEO"&&el.id!=="tv"){' +
+    '        el.style.cssText="display:none!important";' +
+    '      }' +
+    '    }' +
+    '  } catch(e){}' +
+    '}' +
+    'tv.addEventListener("load", function(){' +
+    '  try {' +
+    '    var doc = tv.contentDocument || tv.contentWindow.document;' +
+    '    var style = doc.createElement("style");' +
+    '    style.textContent = adSels + "{display:none!important;visibility:hidden!important;}";' +
+    '    doc.head.appendChild(style);' +
+    '    setInterval(function(){ killAds(doc); }, 800);' +
+    '  } catch(e) { setInterval(function(){ killAds(document); }, 800); }' +
+    '});' +
+    '<\/script></body></html>';
+
+  res.set('Content-Type', 'text/html');
+  res.send(html);
+});
+
 // ═══════════════════════════════════════════════════════════
 // IN-MEMORY STATE
 // ═══════════════════════════════════════════════════════════
@@ -432,6 +558,13 @@ io.on('connection', socket => {
     if (wp.playing) { wp.currentTime = calcWpTime(wp); wp.lastSync = Date.now(); }
     socket.emit('watch-state', { ...wp, channelId });
     socket.emit('music-state', { ...getMb(channelId), channelId });
+    // Vibe, pins, focus, canvas state
+    const vb = getVibe(channelId);
+    socket.emit('vibe-update', { channelId, vibe: vb.vibe });
+    socket.emit('pins-update', { channelId, pins: pins.get(channelId)||[] });
+    const fs = focusSessions.get(channelId);
+    if (fs && fs.active) socket.emit('focus-state', { ...fs, channelId });
+    socket.emit('canvas-state', { channelId, strokes: getCanvas(channelId).strokes });
   });
 
   // ── SEND MESSAGE ───────────────────────────────────────
@@ -458,6 +591,7 @@ io.on('connection', socket => {
       attachments: attachments||[],
     });
     io.to('ch:'+channelId).emit('new-message', { ...msg.toObject(), channelId });
+    bumpVibe(channelId);
   });
 
   // ── DM ─────────────────────────────────────────────────
@@ -582,10 +716,96 @@ io.on('connection', socket => {
     if (socket.currentVoiceChannel) io.to('voice:'+socket.currentVoiceChannel).emit('peer-mute',{ peerId:socket.id, muted });
   });
 
-  // ── DISCONNECT ─────────────────────────────────────────
+  // ── PIN ────────────────────────────────────────────────
+  socket.on('pin-message', async ({messageId, channelId}) => {
+    const me = connected[socket.id]; if (!me) return;
+    const msg = await Message.findById(messageId); if (!msg) return;
+    if (!pins.has(channelId)) pins.set(channelId, []);
+    const cp = pins.get(channelId);
+    if (cp.find(p => p.msgId === messageId)) return;
+    cp.unshift({ msgId:messageId, content:(msg.content||'').slice(0,120), authorName:msg.authorName, pinnedBy:me.username, pinnedAt:new Date() });
+    if (cp.length > 10) cp.pop();
+    io.to('ch:'+channelId).emit('pins-update', { channelId, pins: cp });
+  });
+  socket.on('unpin-message', ({msgId, channelId}) => {
+    if (!pins.has(channelId)) return;
+    pins.set(channelId, pins.get(channelId).filter(p => p.msgId !== msgId));
+    io.to('ch:'+channelId).emit('pins-update', { channelId, pins: pins.get(channelId) });
+  });
+
+  // ── POLL ───────────────────────────────────────────────
+  socket.on('poll-vote', ({pollId, optionIdx}) => {
+    const me = connected[socket.id]; if (!me) return;
+    const poll = polls.get(pollId); if (!poll) return;
+    poll.options.forEach(o => { const i = o.votes.indexOf(me.userId); if (i >= 0) o.votes.splice(i,1); });
+    if (optionIdx >= 0 && optionIdx < poll.options.length) poll.options[optionIdx].votes.push(me.userId);
+    const total = poll.options.reduce((s,o) => s + o.votes.length, 0);
+    io.to('ch:'+poll.channelId).emit('poll-update', {
+      pollId,
+      options: poll.options.map(o => ({ text:o.text, count:o.votes.length, pct: total ? Math.round(o.votes.length/total*100) : 0, voted: o.votes.includes(me.userId) }))
+    });
+  });
+
+  // ── CANVAS ─────────────────────────────────────────────
+  socket.on('canvas-stroke', ({channelId, stroke}) => {
+    const me = connected[socket.id]; if (!me) return;
+    const cv = getCanvas(channelId);
+    cv.strokes.push({ ...stroke, user: me.username });
+    if (cv.strokes.length > 5000) cv.strokes = cv.strokes.slice(-3000);
+    socket.to('ch:'+channelId).emit('canvas-stroke', { stroke: { ...stroke, user:me.username }, channelId });
+    bumpVibe(channelId);
+  });
+  socket.on('canvas-clear', ({channelId}) => {
+    const me = connected[socket.id]; if (!me) return;
+    getCanvas(channelId).strokes = [];
+    io.to('ch:'+channelId).emit('canvas-cleared', { channelId, by: me.username });
+  });
+
+  // ── FOCUS / POMODORO ───────────────────────────────────
+  socket.on('focus-start', ({channelId, minutes, label}) => {
+    const me = connected[socket.id]; if (!me) return;
+    const mins = Math.min(Math.max(parseInt(minutes)||25, 1), 120);
+    const session = { active:true, startedBy:me.username, endAt:Date.now()+mins*60000, label:label||'🎯 Focus', minutes:mins };
+    focusSessions.set(channelId, session);
+    io.to('ch:'+channelId).emit('focus-state', { ...session, channelId });
+    setTimeout(() => {
+      const cur = focusSessions.get(channelId);
+      if (cur && cur.endAt === session.endAt) {
+        focusSessions.set(channelId, { active:false });
+        io.to('ch:'+channelId).emit('focus-end', { channelId, label: session.label });
+      }
+    }, mins * 60000);
+  });
+  socket.on('focus-stop', ({channelId}) => {
+    focusSessions.set(channelId, { active:false });
+    io.to('ch:'+channelId).emit('focus-end', { channelId });
+  });
+
+  // ── PARTYDO (host-controlled shared screen) ───────────
+  socket.on('partydo-start', ({channelId}) => {
+    const me = connected[socket.id]; if (!me) return;
+    partydoHosts[channelId] = socket.id;
+    const wp = getWp(channelId);
+    Object.assign(wp, { active:true, type:'partydo', url:'/partydo-view', videoId:null, title:'⚽ Fútbol en Vivo', playing:true, currentTime:0, startedBy:me.username, lastSync:Date.now() });
+    io.to('ch:'+channelId).emit('watch-state', { ...wp, channelId, partydoHost:socket.id });
+  });
+  socket.on('partydo-stop', ({channelId}) => {
+    const me = connected[socket.id]; if (!me) return;
+    if (partydoHosts[channelId] !== socket.id) return;
+    delete partydoHosts[channelId];
+    const wp = getWp(channelId);
+    Object.assign(wp, { active:false, type:'youtube', url:null, videoId:null, playing:false });
+    io.to('ch:'+channelId).emit('watch-state', { ...wp, channelId });
+  });
+
+    // ── DISCONNECT ─────────────────────────────────────────
   socket.on('disconnect', async () => {
     const me = connected[socket.id];
     leaveVoice(socket);
+    // Limpiar partydo host si era el host
+    for (const [cid, sid] of Object.entries(partydoHosts)) {
+      if (sid === socket.id) delete partydoHosts[cid];
+    }
     if (me) {
       await User.findByIdAndUpdate(me.userId, { status:'offline', lastSeen:new Date() });
       io.emit('user-status',{ userId:me.userId, status:'offline' });
@@ -648,10 +868,12 @@ async function handleCmd(socket, me, channel, text) {
       break;
     }
     case '/partydo': {
+      // Partydo: host-controlled, shared iframe with adblock
+      partydoHosts[cid] = socket.id;
       const wp = getWp(cid);
-      Object.assign(wp, { active:true, type:'iframe', url:'https://librefutboltv.su/home1/', videoId:null, title:'⚽ Fútbol Libre', playing:true, currentTime:0, startedBy:me.username, lastSync:Date.now() });
-      io.to('ch:'+cid).emit('watch-state',{ ...wp, channelId:cid });
-      await botMsg(`⚽ **${me.username}** abrió Fútbol Libre.`);
+      Object.assign(wp, { active:true, type:'partydo', url:'/partydo-view', videoId:null, title:'⚽ Fútbol en Vivo', playing:true, currentTime:0, startedBy:me.username, lastSync:Date.now() });
+      io.to('ch:'+cid).emit('watch-state', { ...wp, channelId:cid, partydoHost:socket.id });
+      await botMsg(`⚽ **${me.username}** abrió el Fútbol en Vivo. Solo él puede controlarlo. ¡Usa /stop para cerrar!`);
       break;
     }
     case '/skip':   { if(!mb.current){await botMsg('❌ Nada sonando.');return;} await botMsg('⏭️ Saltado.'); await playNext(mb,cid,botMsg); break; }
@@ -661,8 +883,108 @@ async function handleCmd(socket, me, channel, text) {
     case '/volume': { const v=parseInt(args);if(isNaN(v)||v<0||v>100){await botMsg('❌ `/volume 0-100`');return;} mb.volume=v;emitMb();io.to('ch:'+cid).emit('music-volume',{v,channelId:cid});await botMsg(`🔊 ${v}%`); break; }
     case '/queue':  { if(!mb.current&&!mb.queue.length){await botMsg('📋 Cola vacía.');return;} let t='📋 **Cola:**\n';if(mb.current)t+=`▶️ ${mb.current.title}\n`;mb.queue.forEach((s,i)=>t+=`${i+1}. ${s.title}\n`);await botMsg(t); break; }
     case '/np':     { if(!mb.current){await botMsg('❌ Nada.');return;} await botMsg(`🎵 **${mb.current.title}** — ${mb.current.requestedBy}`); break; }
-    case '/help':   { await botMsg('🤖 `/play` `/watch` `/partydo` `/skip` `/stop` `/pause` `/resume` `/volume` `/queue` `/np`'); break; }
-    default:        { await botMsg('❓ Usa `/help`.'); }
+    // ── 🎲 ROLL ─────────────────────────────────────────
+    case '/roll': {
+      const faces = Math.min(Math.max(parseInt(args)||6, 2), 1000);
+      const result = Math.floor(Math.random() * faces) + 1;
+      await botMsg(`🎲 **${me.username}** tiró un d${faces} → **${result}**`);
+      io.to('ch:'+cid).emit('dice-roll', { user:me.username, faces, result, channelId:cid });
+      break;
+    }
+
+    // ── 📊 POLL ──────────────────────────────────────────
+    case '/poll': {
+      // /poll "pregunta" opcion1|opcion2|opcion3
+      const pMatch = args.match(/^"([^"]+)"\s+(.+)$/);
+      if (!pMatch) { await botMsg('❌ Uso: `/poll "Pregunta?" opcion1|opcion2|opcion3`'); break; }
+      const question = pMatch[1];
+      const opts = pMatch[2].split('|').map(s=>s.trim()).filter(Boolean).slice(0,5);
+      if (opts.length < 2) { await botMsg('❌ Mínimo 2 opciones.'); break; }
+      const pollId = nanoid(8);
+      polls.set(pollId, { question, options:opts.map(t=>({text:t,votes:[]})), createdBy:me.username, channelId:cid });
+      const m2 = await Message.create({ channel:cid, server:channel.server, authorName:'📊 Encuesta', content:`__POLL__${pollId}`, type:'bot' });
+      const pollData = { pollId, question, options:opts.map(t=>({text:t,count:0,pct:0,voted:false})) };
+      io.to('ch:'+cid).emit('new-message', { ...m2.toObject(), channelId:cid, pollData });
+      break;
+    }
+
+    // ── 🌐 TRANSLATE ─────────────────────────────────────
+    case '/translate': {
+      const langMap = {es:'es',en:'en',fr:'fr',de:'de',it:'it',pt:'pt',ja:'ja',ko:'ko',zh:'zh',ar:'ar',ru:'ru'};
+      const langArg = parts[1]?.toLowerCase();
+      const targetCode = langMap[langArg] || 'en';
+      const textToTr = parts.slice(langArg && langMap[langArg] ? 2 : 1).join(' ');
+      if (!textToTr) { await botMsg('❌ `/translate en Hola mundo`'); break; }
+      const translated = await translateText(textToTr, targetCode);
+      await botMsg(`🌐 [${targetCode.toUpperCase()}] ${translated}`);
+      break;
+    }
+
+    // ── 🔔 ALARM ─────────────────────────────────────────
+    case '/alarm': {
+      const timeArg = parts[1]; const alLabel = parts.slice(2).join(' ') || '⏰ Alarma';
+      let triggerAt;
+      if (timeArg?.includes(':')) {
+        const [h,m] = timeArg.split(':').map(Number);
+        const t = new Date(); t.setHours(h,m,0,0);
+        if (t <= new Date()) t.setDate(t.getDate()+1);
+        triggerAt = t.getTime();
+      } else {
+        const mins = parseInt(timeArg);
+        if (isNaN(mins)||mins<1) { await botMsg('❌ `/alarm 20:00 Partido` o `/alarm 30 Descanso`'); break; }
+        triggerAt = Date.now() + mins*60000;
+      }
+      const alId = nanoid(6);
+      alarms.set(alId, { channelId:cid, label:alLabel, triggerAt, createdBy:me.username });
+      const diff = Math.round((triggerAt - Date.now())/60000);
+      await botMsg(`🔔 Alarma **"${alLabel}"** en ${diff} min (${new Date(triggerAt).toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'})})`);
+      break;
+    }
+
+    // ── 🎯 FOCUS ─────────────────────────────────────────
+    case '/focus': {
+      if (args === 'stop') { socket.emit('focus-stop', {channelId:cid}); focusSessions.set(cid,{active:false}); io.to('ch:'+cid).emit('focus-end',{channelId:cid}); await botMsg('🎯 Sesión focus terminada.'); break; }
+      const fMins = Math.min(Math.max(parseInt(args)||25,1),120);
+      const fLabel = args.replace(/^\d+\s*/,'').trim() || '🎯 Focus';
+      const fSession = { active:true, startedBy:me.username, endAt:Date.now()+fMins*60000, label:fLabel, minutes:fMins };
+      focusSessions.set(cid, fSession);
+      io.to('ch:'+cid).emit('focus-state', { ...fSession, channelId:cid });
+      await botMsg(`🎯 **Sesión Focus** ${fMins} min iniciada por **${me.username}**. ¡A concentrarse!`);
+      setTimeout(() => {
+        const cur = focusSessions.get(cid);
+        if (cur && cur.endAt === fSession.endAt) { focusSessions.set(cid,{active:false}); io.to('ch:'+cid).emit('focus-end',{channelId:cid,label:fLabel}); }
+      }, fMins*60000);
+      break;
+    }
+
+    // ── 🎨 DRAW ──────────────────────────────────────────
+    case '/draw': {
+      io.to('ch:'+cid).emit('open-canvas', { channelId:cid });
+      await botMsg(`🎨 **${me.username}** abrió la pizarra colaborativa. ¡Todos pueden dibujar!`);
+      break;
+    }
+
+    // ── 💾 SNAPSHOT ──────────────────────────────────────
+    case '/snapshot': {
+      await botMsg(`💾 Descarga el historial: [📥 snapshot-${cid.slice(-6)}.html](/api/channels/${cid}/snapshot)`);
+      break;
+    }
+
+    // ── 📌 PIN ───────────────────────────────────────────
+    case '/pin': {
+      await botMsg('📌 Haz clic derecho (o mantén pulsado en móvil) en un mensaje y elige **Fijar**.');
+      break;
+    }
+
+    case '/skip':   { if(!mb.current){await botMsg('❌ Nada sonando.');return;} await botMsg('⏭️ Saltado.'); await playNext(mb,cid,botMsg); break; }
+    case '/stop':   { mb.queue=[];mb.playing=false;mb.current=null;mb.paused=false;emitMb();io.to('ch:'+cid).emit('music-stop',{channelId:cid});await botMsg('⏹️ Detenido.'); break; }
+    case '/pause':  { if(!mb.playing){await botMsg('❌ Sin música.');return;} mb.paused=true;emitMb();io.to('ch:'+cid).emit('music-pause',{channelId:cid});await botMsg('⏸️ Pausada.'); break; }
+    case '/resume': { if(!mb.paused){await botMsg('❌ No pausada.');return;} mb.paused=false;emitMb();io.to('ch:'+cid).emit('music-resume',{channelId:cid});await botMsg('▶️ Reanudada.'); break; }
+    case '/volume': { const v=parseInt(args);if(isNaN(v)||v<0||v>100){await botMsg('❌ `/volume 0-100`');return;} mb.volume=v;emitMb();io.to('ch:'+cid).emit('music-volume',{v,channelId:cid});await botMsg(`🔊 ${v}%`); break; }
+    case '/queue':  { if(!mb.current&&!mb.queue.length){await botMsg('📋 Cola vacía.');return;} let qt='📋 **Cola:**\n';if(mb.current)qt+=`▶️ ${mb.current.title}\n`;mb.queue.forEach((s,i)=>qt+=`${i+1}. ${s.title}\n`);await botMsg(qt); break; }
+    case '/np':     { if(!mb.current){await botMsg('❌ Nada.');return;} await botMsg(`🎵 **${mb.current.title}** — ${mb.current.requestedBy}`); break; }
+    case '/help':   { await botMsg('🤖 **Comandos disponibles:**\n🎵 `/play` `/watch` `/partydo` `/skip` `/stop` `/pause` `/resume` `/volume` `/queue` `/np`\n🎮 `/roll [caras]` `/poll "pregunta" op1|op2` `/alarm HH:MM label` `/focus [mins]`\n🛠️ `/translate [lang] texto` `/draw` `/snapshot` `/pin`'); break; }
+    default:        { await botMsg('❓ Comando desconocido. Usa `/help`.'); }
   }
 }
 

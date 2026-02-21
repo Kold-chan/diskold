@@ -293,6 +293,66 @@ html,body{height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(
   /* En watch party, el chat del canal va debajo del video */
   #watch-view .wp-chat .msgs{flex:1;}
 }
+
+/* ═══ VIBE METER ══════════════════════════════════════════ */
+.vibe-bar{height:3px;background:var(--line);flex-shrink:0;overflow:hidden;}
+.vibe-fill{height:100%;background:linear-gradient(90deg,var(--ice),var(--purple));transition:width .8s ease;width:0%;}
+
+/* ═══ PINS BAR ════════════════════════════════════════════ */
+.pins-bar{background:rgba(168,216,255,.05);border-bottom:1px solid var(--line);padding:5px 12px;display:none;align-items:center;gap:8px;flex-shrink:0;cursor:pointer;}
+.pins-bar.on{display:flex;}
+.pins-bar:hover{background:rgba(168,216,255,.08);}
+.pins-bar-txt{font-size:.72rem;color:var(--ice);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.pins-panel{position:absolute;top:46px;right:0;width:300px;max-height:350px;overflow-y:auto;background:var(--bg2);border:1px solid var(--line);border-radius:10px;z-index:50;box-shadow:0 8px 24px rgba(0,0,0,.5);padding:6px;}
+.pin-item{padding:7px 8px;border-radius:6px;cursor:pointer;transition:background .15s;}
+.pin-item:hover{background:var(--bg3);}
+.pin-item-name{font-size:.7rem;font-weight:700;color:var(--ice);}
+.pin-item-txt{font-size:.78rem;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+
+/* ═══ FOCUS BANNER ════════════════════════════════════════ */
+.focus-banner{background:linear-gradient(135deg,rgba(96,165,250,.1),rgba(192,132,252,.1));border-bottom:1px solid rgba(192,132,252,.3);padding:6px 12px;display:none;align-items:center;gap:8px;flex-shrink:0;}
+.focus-banner.on{display:flex;}
+.focus-label{font-size:.8rem;font-weight:700;color:var(--purple);}
+.focus-timer{font-family:'Space Mono',monospace;font-size:.78rem;color:var(--text);margin-left:auto;}
+.focus-stop{background:none;border:1px solid rgba(192,132,252,.3);border-radius:4px;color:var(--purple);cursor:pointer;padding:2px 7px;font-size:.7rem;}
+
+/* ═══ CANVAS / DRAW ══════════════════════════════════════ */
+.canvas-wrap{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:200;display:none;flex-direction:column;align-items:center;justify-content:center;gap:10px;}
+.canvas-wrap.open{display:flex;}
+.canvas-toolbar{display:flex;align-items:center;gap:8px;background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:8px 12px;}
+.cv-btn{background:var(--bg3);border:1px solid var(--line);border-radius:5px;color:var(--text);cursor:pointer;padding:4px 10px;font-size:.78rem;}
+.cv-btn:hover{border-color:var(--ice);}
+.cv-btn.active{border-color:var(--purple);color:var(--purple);}
+.cv-color{width:24px;height:24px;border-radius:50%;cursor:pointer;border:2px solid transparent;flex-shrink:0;}
+.cv-color.active{border-color:var(--text);}
+canvas#draw-canvas{background:#fff;border-radius:8px;cursor:crosshair;touch-action:none;max-width:95vw;max-height:60vh;}
+
+/* ═══ POLL ═══════════════════════════════════════════════ */
+.poll-card{background:var(--bg3);border:1px solid var(--line);border-radius:10px;padding:12px;margin-top:5px;}
+.poll-q{font-weight:700;font-size:.88rem;margin-bottom:8px;}
+.poll-opt{display:flex;align-items:center;gap:8px;margin-bottom:5px;cursor:pointer;border-radius:6px;padding:5px 7px;transition:background .15s;}
+.poll-opt:hover{background:var(--bg4);}
+.poll-opt.voted{background:rgba(96,165,250,.1);}
+.poll-bar-wrap{flex:1;background:var(--bg4);border-radius:10px;height:6px;overflow:hidden;}
+.poll-bar{height:100%;background:var(--blue);border-radius:10px;transition:width .4s ease;}
+.poll-pct{font-size:.68rem;color:var(--muted);font-family:'Space Mono',monospace;width:34px;text-align:right;}
+.poll-opt-txt{font-size:.82rem;min-width:60px;}
+
+/* ═══ ALARM RING ═════════════════════════════════════════ */
+.alarm-toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:var(--bg2);border:2px solid var(--gold);border-radius:12px;padding:12px 20px;z-index:500;display:none;flex-direction:column;align-items:center;gap:4px;box-shadow:0 8px 32px rgba(0,0,0,.6);animation:alarm-shake .5s ease;}
+.alarm-toast.on{display:flex;}
+@keyframes alarm-shake{0%,100%{transform:translateX(-50%) rotate(0deg);}20%{transform:translateX(-50%) rotate(-3deg);}40%{transform:translateX(-50%) rotate(3deg);}60%{transform:translateX(-50%) rotate(-2deg);}80%{transform:translateX(-50%) rotate(2deg);}}
+.alarm-title{font-family:'Bebas Neue',sans-serif;letter-spacing:3px;color:var(--gold);font-size:1.3rem;}
+
+/* ═══ DICE ROLL ══════════════════════════════════════════ */
+.dice-anim{display:inline-block;animation:dice-spin .6s ease-out;}
+@keyframes dice-spin{0%{transform:rotate(0deg) scale(.5);}60%{transform:rotate(380deg) scale(1.2);}100%{transform:rotate(360deg) scale(1);}}
+
+/* ═══ CONTEXT MENU ═══════════════════════════════════════ */
+#ctx-menu{position:fixed;background:var(--bg2);border:1px solid var(--line);border-radius:8px;padding:4px;z-index:300;display:none;min-width:150px;box-shadow:0 8px 24px rgba(0,0,0,.5);}
+.ctx-item{padding:6px 10px;border-radius:5px;cursor:pointer;font-size:.82rem;display:flex;align-items:center;gap:7px;}
+.ctx-item:hover{background:var(--bg3);}
+.ctx-item.danger:hover{color:var(--red);}
 </style>
 </head>
 <body>
@@ -422,10 +482,22 @@ html,body{height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(
       <div class="topbar">
         <span class="topbar-ch"><span class="sym" id="ch-sym">#</span><span id="ch-name-top">general</span></span>
         <div class="topbar-right">
+          <button class="tb-btn" id="pins-btn" onclick="togglePinsPanel()" title="Mensajes fijados">📌 <span id="pins-count"></span></button>
           <button class="tb-btn" id="wp-open-btn" onclick="openWatchModal()">🎬 Watch Party</button>
           <button class="tb-btn" onclick="toggleMemberPanel()">👥</button>
+          <button class="tb-btn" onclick="downloadSnapshot()" title="Exportar chat">💾</button>
         </div>
       </div>
+      <div id="pins-panel-wrap" style="position:relative;">
+        <div id="pins-panel-dropdown" style="display:none;" class="pins-panel"></div>
+      </div>
+      <div class="focus-banner" id="focus-banner">
+        <span>🎯</span>
+        <span class="focus-label" id="focus-label">Focus</span>
+        <span class="focus-timer" id="focus-timer">--:--</span>
+        <button class="focus-stop" onclick="stopFocus()">✕ Parar</button>
+      </div>
+      <div class="vibe-bar"><div class="vibe-fill" id="vibe-fill"></div></div>
       <div class="msgs" id="messages"></div>
       <div class="typing" id="typing-bar" style="display:none;">
         <div class="tdots"><span></span><span></span><span></span></div>
@@ -461,7 +533,7 @@ html,body{height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(
             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" inputmode="text"></textarea>
           <button class="send-btn" onclick="sendMsg()">▶</button>
         </div>
-        <div class="cmd-hint">/play /watch /partydo /skip /stop /pause /help</div>
+        <div class="cmd-hint">/play /watch /partydo /roll /poll /alarm /focus /translate /draw /snapshot /help</div>
       </div>
     </div>
 
@@ -619,7 +691,7 @@ const socket = io();
 let myToken=null, myUser=null;
 let currentServer=null, currentChannel=null;
 let dmWithId=null, dmWithUser=null;
-let inVoice=false, micMuted=false;
+let inVoice=false, voiceChId=null, micMuted=false;
 let localStream=null; const peers={};
 let memberPanelOpen=false;
 // Watch Party
@@ -740,7 +812,10 @@ async function selectServer(srvId){
   document.querySelectorAll('.srv-btn').forEach(b=>b.classList.remove('active'));
   $(`sb-${srvId}`)?.classList.add('active');
   $('v-dm-panel').style.display='none';
-  showView('welcome');
+  // Auto-entrar al primer canal de texto
+  const firstText=currentServer.channels.find(c=>c.type==='text');
+  if(firstText) selectChannel(String(firstText._id));
+  else showView('welcome');
 }
 function renderChSidebar(){
   if(!currentServer)return;
@@ -1697,472 +1772,390 @@ document.addEventListener('DOMContentLoaded',()=>{
     }
   });
 });
-
-// ═══════════════════════════════════════════════════════
-// FEATURES v4.3 — 10 nuevas funciones + partydo adblock
-// ═══════════════════════════════════════════════════════
-
-// ── 🌡️ VIBE METER ─────────────────────────────────────
-let currentVibe = 0;
-socket.on('vibe-update', ({channelId, vibe}) => {
-  if(String(channelId) !== chIdStr()) return;
-  currentVibe = vibe;
-  updateVibeMeter(vibe);
-});
-function updateVibeMeter(v) {
-  const fill = $('vibe-fill');
-  if(!fill) return;
-  fill.style.width = v + '%';
-  const colors = v > 75 ? ['#ff4466','#ff6644'] : v > 50 ? ['#ffd166','#ff9144'] : v > 25 ? ['#39ffc0','#4fc3f7'] : ['#3a6080','#a8d8ff'];
-  fill.style.background = `linear-gradient(90deg,${colors[0]},${colors[1]})`;
-  const label = $('vibe-label');
-  if(label) label.textContent = v > 80 ? '🔥 On Fire' : v > 60 ? '⚡ Activo' : v > 40 ? '💬 Hablando' : v > 20 ? '😴 Tranquilo' : '💤 Silencio';
-}
-
-// ── 📌 PINS ─────────────────────────────────────────────
-let currentPins = [];
-socket.on('pins-update', ({channelId, pins}) => {
-  if(String(channelId) !== chIdStr()) return;
-  currentPins = pins;
-  renderPins(pins);
-});
-function renderPins(pins) {
-  const box = $('pins-dropdown');
-  if(!box) return;
-  const count = $('pins-count');
-  if(count) count.textContent = pins.length ? `(${pins.length})` : '';
-  if(!pins.length) { box.innerHTML = '<div style="padding:12px;font-size:.78rem;color:var(--muted);text-align:center;">Sin mensajes fijados</div>'; return; }
-  box.innerHTML = pins.map(p => `<div class="pin-item">
-    <div class="pin-item-name">📌 ${esc(p.authorName)} <span style="color:var(--muted);font-weight:400;">fijado por ${esc(p.pinnedBy)}</span></div>
-    <div class="pin-item-txt">${esc(p.content)}${p.content.length>=120?'…':''}</div>
-  </div>`).join('');
-}
-function togglePinsPanel() {
-  const box = $('pins-dropdown');
-  if(!box) return;
-  const isOpen = box.style.display === 'block';
-  box.style.display = isOpen ? 'none' : 'block';
-  if(!isOpen) renderPins(currentPins);
-}
-document.addEventListener('click', e => {
-  if(!e.target.closest('#pins-dropdown') && !e.target.closest('[onclick*="togglePinsPanel"]'))
-    { const b = $('pins-dropdown'); if(b) b.style.display='none'; }
-});
-
-// ── 📊 POLLS ────────────────────────────────────────────
-socket.on('poll-update', ({pollId, options}) => {
-  const cards = document.querySelectorAll(`[data-pollid="${pollId}"]`);
-  cards.forEach(card => updatePollCard(card, pollId, options));
-});
-function renderPollCard(pollData) {
-  const {pollId, question, options} = pollData;
-  const opts = options.map((o, i) => `
-    <div class="poll-opt ${o.voted?'voted':''}" onclick="castVote('${pollId}',${i})" data-idx="${i}">
-      <div class="poll-bar-wrap"><div class="poll-bar" style="width:${o.pct||0}%"></div></div>
-      <span class="poll-opt-txt">${esc(o.text)}</span>
-      <span class="poll-pct">${o.pct||0}%</span>
-    </div>`).join('');
-  return `<div class="poll-card" data-pollid="${pollId}">
-    <div class="poll-q">📊 ${esc(question)}</div>
-    ${opts}
-    <div style="font-size:.68rem;color:var(--muted);margin-top:5px;">Total: ${options.reduce((s,o)=>s+o.count,0)} votos</div>
-  </div>`;
-}
-function updatePollCard(card, pollId, options) {
-  if(!card) return;
-  const opts = card.querySelectorAll('.poll-opt');
-  const total = options.reduce((s,o)=>s+o.count,0);
-  options.forEach((o,i) => {
-    if(opts[i]) {
-      opts[i].classList.toggle('voted', o.voted);
-      const bar = opts[i].querySelector('.poll-bar');
-      if(bar) bar.style.width = (o.pct||0) + '%';
-      const pct = opts[i].querySelector('.poll-pct');
-      if(pct) pct.textContent = (o.pct||0) + '%';
-    }
-  });
-  const tot = card.querySelector('div:last-child');
-  if(tot) tot.textContent = `Total: ${total} votos`;
-}
-function castVote(pollId, optionIdx) {
-  socket.emit('poll-vote', {pollId, optionIdx});
-}
-
-// ── 🎲 DICE ROLL ────────────────────────────────────────
-socket.on('dice-roll', ({user, faces, result, channelId}) => {
-  if(String(channelId) !== chIdStr()) return;
-  // Animación visual
-  showDiceAnim(faces, result);
-});
-function showDiceAnim(faces, result) {
-  let d = $('dice-anim');
-  if(!d) {
-    d = document.createElement('div');
-    d.id = 'dice-anim';
-    d.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--bg2);border:2px solid var(--ice);border-radius:18px;padding:24px 36px;z-index:500;text-align:center;box-shadow:0 16px 48px rgba(0,0,0,.8);pointer-events:none;';
-    document.body.appendChild(d);
-  }
-  let count = 0;
-  const max = 12;
-  const interval = setInterval(() => {
-    const n = count < max - 1 ? Math.floor(Math.random()*faces)+1 : result;
-    d.innerHTML = `<div style="font-family:'Bebas Neue',sans-serif;font-size:3rem;color:var(--ice);">🎲</div><div style="font-family:'Bebas Neue',sans-serif;font-size:5rem;color:var(--text);letter-spacing:2px;">${n}</div><div style="font-size:.72rem;color:var(--muted);font-family:'Space Mono',monospace;">d${faces}</div>`;
-    count++;
-    if(count >= max) { clearInterval(interval); setTimeout(()=>d.remove(), 2000); }
-  }, 60);
-}
-
-// ── 🔔 ALARM ────────────────────────────────────────────
-socket.on('alarm-ring', ({label, createdBy}) => {
-  const toast = $('alarm-toast');
-  const title = $('alarm-title');
-  const by = $('alarm-by');
-  if(title) title.textContent = label || '⏰ Alarma';
-  if(by) by.textContent = 'Programada por ' + (createdBy||'');
-  if(toast) toast.classList.add('on');
-  // Sonido
-  beepAlarm();
-});
-function beepAlarm() {
-  for(let i=0;i<3;i++) setTimeout(()=>{beep(880,.2,.3);setTimeout(()=>beep(1100,.25,.3),120);},i*600);
-}
-function dismissAlarm() {
-  const t = $('alarm-toast');
-  if(t) t.classList.remove('on');
-}
-
-// ── 🎯 FOCUS / POMODORO ─────────────────────────────────
-let focusInterval = null;
-socket.on('focus-state', ({channelId, active, endAt, label, startedBy}) => {
-  if(String(channelId) !== chIdStr()) return;
-  if(active) startFocusTimer(endAt, label, startedBy);
-});
-socket.on('focus-end', ({channelId, label}) => {
-  if(String(channelId) !== chIdStr()) return;
-  clearInterval(focusInterval); focusInterval = null;
-  const banner = $('focus-banner');
-  if(banner) banner.classList.remove('on');
-  if(label) showNotif(`🎯 Sesión focus "${label}" terminada. ¡Buen trabajo!`);
-  beepAlarm();
-});
-function startFocusTimer(endAt, label, startedBy) {
-  const banner = $('focus-banner');
-  const labelEl = $('focus-label-txt');
-  const timerEl = $('focus-timer');
-  if(!banner) return;
-  banner.classList.add('on');
-  if(labelEl) labelEl.textContent = `${label||'🎯 Focus'} · iniciado por ${startedBy||''}`;
-  clearInterval(focusInterval);
-  focusInterval = setInterval(() => {
-    const rem = Math.max(0, endAt - Date.now());
-    const m = Math.floor(rem/60000); const s = Math.floor((rem%60000)/1000);
-    if(timerEl) timerEl.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-    if(rem <= 0) { clearInterval(focusInterval); }
-  }, 1000);
-}
-
-// ── 🎨 CANVAS / PIZARRA ──────────────────────────────────
-let canvasOpen = false;
-let drawing = false;
-let lastX = 0, lastY = 0;
-let brushColor = '#a8d8ff';
-let brushSize = 4;
-let currentChannelCanvas = null;
-
-socket.on('open-canvas', ({channelId}) => {
-  if(String(channelId) !== chIdStr()) return;
-  openCanvas(channelId);
-});
-socket.on('canvas-state', ({channelId, strokes}) => {
-  if(String(channelId) !== chIdStr()) return;
-  currentChannelCanvas = channelId;
-  if(canvasOpen) replayStrokes(strokes);
-});
-socket.on('canvas-stroke', ({stroke, channelId}) => {
-  if(String(channelId) !== chIdStr()) return;
-  drawStroke(stroke, false);
-});
-socket.on('canvas-cleared', ({channelId, by}) => {
-  if(String(channelId) !== chIdStr()) return;
-  const cv = $('draw-canvas');
-  if(cv) cv.getContext('2d').clearRect(0,0,cv.width,cv.height);
-  showNotif(`🎨 ${by} limpió la pizarra`);
-});
-function openCanvas(channelId) {
-  currentChannelCanvas = channelId || chIdStr();
-  canvasOpen = true;
-  const wrap = $('canvas-wrap');
-  if(wrap) wrap.classList.add('open');
-  // Request full state
-  socket.emit('canvas-state-request', {channelId: currentChannelCanvas});
-}
-function closeCanvas() {
-  canvasOpen = false;
-  const wrap = $('canvas-wrap');
-  if(wrap) wrap.classList.remove('open');
-}
-function clearCanvas() {
-  if(!currentChannelCanvas) return;
-  const cv = $('draw-canvas');
-  if(cv) cv.getContext('2d').clearRect(0,0,cv.width,cv.height);
-  socket.emit('canvas-clear', {channelId: currentChannelCanvas});
-}
-function replayStrokes(strokes) {
-  const cv = $('draw-canvas'); if(!cv) return;
-  const ctx = cv.getContext('2d');
-  ctx.clearRect(0,0,cv.width,cv.height);
-  strokes.forEach(s => drawStroke(s, false));
-}
-function drawStroke(stroke, emit) {
-  const cv = $('draw-canvas'); if(!cv) return;
-  const ctx = cv.getContext('2d');
-  ctx.beginPath();
-  ctx.moveTo(stroke.x0, stroke.y0);
-  ctx.lineTo(stroke.x1, stroke.y1);
-  ctx.strokeStyle = stroke.color || '#a8d8ff';
-  ctx.lineWidth = stroke.size || 4;
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-  ctx.stroke();
-  if(emit && currentChannelCanvas) {
-    socket.emit('canvas-stroke', { channelId: currentChannelCanvas, stroke });
-  }
-}
-function setupCanvas() {
-  const cv = $('draw-canvas'); if(!cv) return;
-  const getPos = e => {
-    const r = cv.getBoundingClientRect();
-    const src = e.touches ? e.touches[0] : e;
-    return { x: (src.clientX-r.left)*(cv.width/r.width), y: (src.clientY-r.top)*(cv.height/r.height) };
-  };
-  const start = e => { drawing=true; const p=getPos(e); lastX=p.x; lastY=p.y; e.preventDefault(); };
-  const move = e => {
-    if(!drawing) return; e.preventDefault();
-    const p = getPos(e);
-    const stroke = { x0:lastX, y0:lastY, x1:p.x, y1:p.y, color:brushColor, size:brushSize };
-    drawStroke(stroke, true);
-    lastX=p.x; lastY=p.y;
-  };
-  const end = () => drawing=false;
-  cv.addEventListener('mousedown', start);
-  cv.addEventListener('mousemove', move);
-  cv.addEventListener('mouseup', end);
-  cv.addEventListener('touchstart', start, {passive:false});
-  cv.addEventListener('touchmove', move, {passive:false});
-  cv.addEventListener('touchend', end);
-}
-
-// ── 🌐 PARTYDO — Host control UI ─────────────────────────
-let partydoMySocketId = null;
-let partydoHostId = null;
-socket.on('connect', () => { partydoMySocketId = socket.id; });
-
-function createPartydoWP(url, hostSocketId) {
-  partydoHostId = hostSocketId;
-  const isHost = (socket.id === hostSocketId);
-  const wrap = $('wp-video');
-  wrap.innerHTML = '';
-  wrap.style.position = 'relative';
-
-  const fr = document.createElement('iframe');
-  fr.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:none;';
-  fr.setAttribute('allowfullscreen','');
-  fr.setAttribute('allow','autoplay;fullscreen;encrypted-media;picture-in-picture');
-  fr.setAttribute('sandbox','allow-scripts allow-same-origin allow-popups allow-forms allow-presentation allow-top-navigation-by-user-activation');
-  fr.src = url; // '/partydo-view'
-  wrap.appendChild(fr);
-
-  // Toolbar — solo el host puede parar, todos ven quién es el host
-  $('wp-play-btn').style.display = 'none'; // no tiene sentido play/pause en partydo
-  $('wp-title-bar').textContent = '⚽ Fútbol en Vivo' + (isHost ? ' · 🎮 Eres el host' : '');
-
-  // Botón de stop solo para el host
-  const stopBtn = document.getElementById('wp-partydo-stop');
-  if(!stopBtn) {
-    const btn = document.createElement('button');
-    btn.id = 'wp-partydo-stop';
-    btn.className = 'wp-btn red';
-    btn.textContent = '⏹ Cerrar partido';
-    btn.style.display = isHost ? 'block' : 'none';
-    btn.onclick = () => {
-      socket.emit('partydo-stop', {channelId: chIdStr()});
-    };
-    $('wp-toolbar').insertBefore(btn, $('wp-toolbar').querySelector('.wp-btn.red'));
-  } else {
-    stopBtn.style.display = isHost ? 'block' : 'none';
-  }
-
-  wpActive = true; wpType = 'partydo';
-}
-
-// ── 💾 SNAPSHOT helper ───────────────────────────────────
-function downloadSnapshot() {
-  const chId = _chId();
-  if(!chId) return;
-  window.open(`/api/channels/${chId}/snapshot`, '_blank');
-}
-
-// ── 📢 NOTIF TOAST ───────────────────────────────────────
-function showNotif(text, duration=3500) {
-  let n = $('notif-toast');
-  if(!n) {
-    n = document.createElement('div');
-    n.id = 'notif-toast';
-    n.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:10px 18px;z-index:450;font-size:.82rem;color:var(--text);box-shadow:0 4px 20px rgba(0,0,0,.5);transition:opacity .3s;white-space:nowrap;max-width:90vw;overflow:hidden;text-overflow:ellipsis;';
-    document.body.appendChild(n);
-  }
-  n.textContent = text;
-  n.style.opacity = '1';
-  clearTimeout(n._to);
-  n._to = setTimeout(() => { n.style.opacity='0'; }, duration);
-}
-
-// ── HOOK watch-state para partydo ─────────────────────────
-// Extender el watch-state listener original para manejar type='partydo'
-const _origWatchState = socket._events && socket._events['watch-state'];
-socket.on('watch-state', ({channelId, active, type, url, title, playing, currentTime, lastSync, partydoHost}) => {
-  const myCh = chIdStr();
-  if(channelId && myCh && String(channelId) !== myCh) return;
-  if(!active) return; // leaveWPLocal handled by existing listener
-  if(type === 'partydo') {
-    $('wp-title-bar').textContent = title || '⚽ Fútbol en Vivo';
-    $('wp-open-btn').classList.add('live'); $('wp-open-btn').textContent = '🔴 LIVE';
-    $('mob-wp-btn').textContent = '🔴';
-    createPartydoWP(url || '/partydo-view', partydoHost);
-    showView('watch');
-    // Copy chat
-    const msgs=$('messages'); const wpMsgs=$('wp-messages');
-    if(wpMsgs && msgs) wpMsgs.innerHTML = msgs.innerHTML;
-  }
-});
-
-// ── CONTEXT MENU — pin support ────────────────────────────
-let ctxMsgId = null;
-let ctxChannelId = null;
-function ctxAction(action) {
-  const menu = $('ctx-menu');
-  if(menu) menu.style.display = 'none';
-  if(!ctxMsgId) return;
-  if(action === 'reply') startReply(ctxMsgId, ctxMsgContent);
-  else if(action === 'react') showRxnFor(ctxMsgId, ctxChannelId);
-  else if(action === 'pin') { socket.emit('pin-message', {messageId:ctxMsgId, channelId:ctxChannelId}); showNotif('📌 Mensaje fijado'); }
-  else if(action === 'edit') editMsg(ctxMsgId);
-  else if(action === 'delete') deleteMsg(ctxMsgId);
-}
-let ctxMsgContent = '';
-function openCtxMenu(e, msgId, channelId, isMe, content) {
-  e.preventDefault();
-  ctxMsgId = msgId; ctxChannelId = channelId; ctxMsgContent = content;
-  const menu = $('ctx-menu');
-  if(!menu) return;
-  $('ctx-edit').style.display = isMe ? 'block' : 'none';
-  $('ctx-delete').style.display = (isMe || isServerAdmin()) ? 'block' : 'none';
-  menu.style.display = 'block';
-  const top = Math.min(e.clientY, window.innerHeight-160);
-  const left = Math.min(e.clientX, window.innerWidth-160);
-  menu.style.top = top + 'px';
-  menu.style.left = left + 'px';
-}
-document.addEventListener('click', e => {
-  if(!e.target.closest('#ctx-menu')) { const m=$('ctx-menu'); if(m) m.style.display='none'; }
-});
-
-// ── PATCH appendMsg to add ctx menu + poll render ─────────
-const _origAppendMsg = window.appendMsg || function(){};
-// Override appendMsg to add context menu and poll rendering
-const appendMsgOriginal = appendMsg;
-window.appendMsg = function(msg, box) {
-  // Call original
-  appendMsgOriginal(msg, box);
-  // Add context menu to last added element
-  const last = box.lastElementChild;
-  if(last && msg._id && !msg.pollData) {
-    const isMe = String(msg.author) === String(myUser?.id);
-    last.addEventListener('contextmenu', e => openCtxMenu(e, msg._id, String(msg.channelId||_chId()||''), isMe, msg.content||''));
-    last.addEventListener('touchstart', function(e) {
-      const t = setTimeout(() => openCtxMenu(e.touches[0], msg._id, String(msg.channelId||_chId()||''), isMe, msg.content||''), 500);
-      last.addEventListener('touchend', () => clearTimeout(t), {once:true});
-      last.addEventListener('touchmove', () => clearTimeout(t), {once:true});
-    });
-  }
-  // Poll rendering
-  if(msg.pollData && last) {
-    const pollDiv = document.createElement('div');
-    pollDiv.innerHTML = renderPollCard(msg.pollData);
-    last.querySelector('.msg-body')?.appendChild(pollDiv.firstElementChild);
-  }
-};
-
-// ── INIT new features ─────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
-  setupCanvas();
-
-  // Add vibe bar to chat view if not present
-  const chatView = $('v-chat');
-  if(chatView && !$('vibe-bar')) {
-    const vbar = document.createElement('div');
-    vbar.innerHTML = `<div id="vibe-bar" style="height:3px;background:var(--bg3);flex-shrink:0;overflow:hidden;">
-      <div id="vibe-fill" style="height:100%;width:0%;background:linear-gradient(90deg,var(--icedim),var(--ice));transition:width .5s ease;border-radius:0 2px 2px 0;"></div>
-    </div>
-    <div id="focus-banner" style="background:linear-gradient(90deg,rgba(192,132,252,.15),rgba(96,165,250,.1));border-bottom:1px solid rgba(192,132,252,.3);padding:5px 12px;display:none;align-items:center;gap:10px;flex-shrink:0;">
-      <div id="focus-timer" style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;color:var(--purple);min-width:48px;">25:00</div>
-      <div id="focus-label-txt" style="flex:1;font-size:.78rem;color:var(--muted);">🎯 Focus en curso</div>
-      <button onclick="socket.emit('focus-stop',{channelId:chIdStr()})" style="background:none;border:1px solid var(--line);border-radius:5px;color:var(--muted);cursor:pointer;padding:2px 8px;font-size:.72rem;">✕</button>
-    </div>`;
-    const msgs = $('messages');
-    if(msgs) chatView.insertBefore(vbar, msgs);
-  }
-
-  // Add pins button to topbar if not there
-  const topbarRight = document.querySelector('.topbar-right');
-  if(topbarRight && !$('pins-dropdown')) {
-    const pinsWrap = document.createElement('div');
-    pinsWrap.style.position = 'relative';
-    pinsWrap.innerHTML = `<button class="tb-btn" onclick="togglePinsPanel()">📌 <span id="pins-count"></span></button>
-      <div id="pins-dropdown" style="position:absolute;top:100%;right:0;width:280px;background:var(--bg2);border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.5);z-index:40;display:none;max-height:300px;overflow-y:auto;">
-        <div style="padding:12px;font-size:.78rem;color:var(--muted);text-align:center;">Sin mensajes fijados</div>
-      </div>`;
-    topbarRight.insertBefore(pinsWrap, topbarRight.firstChild);
-  }
-
-  // Add snapshot button
-  const cmdHint = document.querySelector('.cmd-hint');
-  if(cmdHint) cmdHint.textContent = '/play /watch /partydo /roll /poll /alarm /focus /translate /draw /snapshot /help';
-});
 </script>
 <script src="https://www.youtube.com/iframe_api"></script>
 
-<!-- ═══ CANVAS / PIZARRA ══════════════════════════════════ -->
-<div id="canvas-wrap" style="position:fixed;inset:0;background:rgba(0,0,0,.92);display:none;flex-direction:column;align-items:center;justify-content:center;z-index:300;gap:10px;padding:12px;">
-  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:8px 12px;">
-    <span style="font-size:.78rem;color:var(--muted);">Color:</span>
-    <input type="color" value="#a8d8ff" oninput="brushColor=this.value" style="width:28px;height:28px;border:none;border-radius:4px;cursor:pointer;background:none;"/>
-    <span style="font-size:.78rem;color:var(--muted);">Tamaño:</span>
-    <input type="range" min="1" max="30" value="4" oninput="brushSize=+this.value" style="width:70px;accent-color:var(--ice);"/>
-    <button onclick="brushColor='#1a1a22';brushSize=30;" style="background:var(--bg3);border:1px solid var(--line);border-radius:5px;color:var(--muted);cursor:pointer;padding:3px 8px;font-size:.75rem;">Borrar</button>
-    <button onclick="clearCanvas()" style="background:rgba(255,68,102,.1);border:1px solid var(--red);border-radius:5px;color:var(--red);cursor:pointer;padding:3px 8px;font-size:.75rem;">🗑 Limpiar</button>
-    <button onclick="closeCanvas()" style="background:var(--bg3);border:1px solid var(--line);border-radius:5px;color:var(--muted);cursor:pointer;padding:3px 8px;font-size:.75rem;">✕ Cerrar</button>
+
+// ═══════════════════════════════════════════════════════
+// FEATURE 1: VIBE METER
+// ═══════════════════════════════════════════════════════
+socket.on('vibe-update',({channelId,vibe})=>{
+  if(String(channelId)!==chIdStr())return;
+  const fill=$('vibe-fill'); if(fill) fill.style.width=vibe+'%';
+  if(fill) fill.title=`Vibe: ${vibe}/100`;
+});
+
+// ═══════════════════════════════════════════════════════
+// FEATURE 2: PINS
+// ═══════════════════════════════════════════════════════
+let channelPins=[];
+socket.on('pins-update',({channelId,pins})=>{
+  if(String(channelId)!==chIdStr())return;
+  channelPins=pins||[];
+  const cnt=$('pins-count');
+  if(cnt) cnt.textContent=channelPins.length?`(${channelPins.length})`:'';
+  if(document.getElementById('pins-panel-dropdown').style.display!=='none') renderPinsPanel();
+});
+function togglePinsPanel(){
+  const pd=$('pins-panel-dropdown');
+  if(pd.style.display==='none'){pd.style.display='block';renderPinsPanel();}
+  else pd.style.display='none';
+}
+function renderPinsPanel(){
+  const pd=$('pins-panel-dropdown');
+  if(!channelPins.length){pd.innerHTML='<div style="padding:10px;font-size:.78rem;color:var(--muted);">Sin mensajes fijados.</div>';return;}
+  pd.innerHTML=channelPins.map(p=>`
+    <div class="pin-item">
+      <div class="pin-item-name">📌 ${esc(p.authorName)} <span style="font-weight:400;color:var(--muted);">fijado por ${esc(p.pinnedBy)}</span></div>
+      <div class="pin-item-txt">${esc(p.content)}</div>
+    </div>`).join('');
+}
+function pinMessage(msgId){
+  socket.emit('pin-message',{messageId:msgId,channelId:chIdStr()});
+}
+
+// ═══════════════════════════════════════════════════════
+// FEATURE 3: FOCUS / POMODORO
+// ═══════════════════════════════════════════════════════
+let focusInterval=null;
+socket.on('focus-state',({active,endAt,label,startedBy,channelId})=>{
+  if(String(channelId)!==chIdStr())return;
+  if(!active){stopFocusUI();return;}
+  $('focus-banner').classList.add('on');
+  $('focus-label').textContent=`${label} — por ${startedBy}`;
+  clearInterval(focusInterval);
+  focusInterval=setInterval(()=>{
+    const rem=Math.max(0,endAt-Date.now());
+    const m=Math.floor(rem/60000), s=Math.floor((rem%60000)/1000);
+    $('focus-timer').textContent=`${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    if(rem<=0){clearInterval(focusInterval);stopFocusUI();}
+  },1000);
+});
+socket.on('focus-end',({channelId,label})=>{
+  if(String(channelId)!==chIdStr())return;
+  stopFocusUI();
+  // Beep de fin de focus
+  beep(880,.15,.2);setTimeout(()=>beep(1100,.2,.2),200);setTimeout(()=>beep(880,.4,.15),450);
+  appendSys(`🎯 ¡Sesión Focus${label?' "'+label+'"':''} terminada! Buen trabajo.`);
+});
+function stopFocusUI(){clearInterval(focusInterval);$('focus-banner').classList.remove('on');}
+function stopFocus(){socket.emit('focus-stop',{channelId:chIdStr()});}
+function appendSys(txt){
+  const box=$('messages'); if(!box)return;
+  const d=document.createElement('div');d.className='msg-sys';d.innerHTML=txt;
+  box.appendChild(d); box.scrollTop=box.scrollHeight;
+}
+
+// ═══════════════════════════════════════════════════════
+// FEATURE 4: POLLS
+// ═══════════════════════════════════════════════════════
+// Polls se renderizan en appendMsg detectando __POLL__ prefix
+function renderPoll(msgEl, pollId, poll){
+  if(!poll)return;
+  const total=poll.options.reduce((a,o)=>a+(o.count||o.votes?.length||0),0);
+  msgEl.innerHTML=`<div class="poll-card">
+    <div class="poll-q">📊 ${esc(poll.question)}</div>
+    ${poll.options.map((o,i)=>{
+      const cnt=o.count||o.votes?.length||0;
+      const pct=total?Math.round(cnt/total*100):0;
+      return `<div class="poll-opt ${o.voted?'voted':''}" onclick="votePoll('${pollId}',${i})">
+        <span class="poll-opt-txt">${esc(o.text)}</span>
+        <div class="poll-bar-wrap"><div class="poll-bar" style="width:${pct}%"></div></div>
+        <span class="poll-pct">${pct}%</span>
+        <span style="font-size:.68rem;color:var(--muted);min-width:20px;">${cnt}</span>
+      </div>`;
+    }).join('')}
+    <div style="font-size:.68rem;color:var(--muted);margin-top:5px;">${total} votos</div>
+  </div>`;
+}
+function votePoll(pollId, optIdx){
+  socket.emit('poll-vote',{pollId,optionIdx:optIdx});
+}
+socket.on('poll-update',({pollId,options})=>{
+  // Actualizar todas las poll-cards con ese pollId
+  document.querySelectorAll(`[data-poll-id="${pollId}"]`).forEach(el=>{
+    const poll={question:el.dataset.pollQ,options};
+    renderPoll(el,pollId,poll);
+    el.dataset.pollQ=el.dataset.pollQ; // keep
+  });
+});
+
+// Patch appendMsg to handle polls
+const _origAppendMsg = appendMsg;
+function appendMsg(msg, box){
+  if(msg.content?.startsWith('__POLL__')&&msg.pollId){
+    const d=document.createElement('div');
+    d.className='msg-grp';
+    d.style.padding='4px 12px';
+    d.dataset.pollId=msg.pollId;
+    d.dataset.pollQ=msg.poll?.question||'';
+    renderPoll(d,msg.pollId,msg.poll);
+    if(box)box.appendChild(d);
+    return;
+  }
+  _origAppendMsg(msg,box);
+}
+
+// ═══════════════════════════════════════════════════════
+// FEATURE 5: DICE ROLL animation
+// ═══════════════════════════════════════════════════════
+socket.on('dice-roll',({user,faces,result,channelId})=>{
+  if(String(channelId)!==chIdStr())return;
+  // Sound
+  beep(result===faces?1200:result===1?300:700,.2,.15,'triangle');
+});
+
+// ═══════════════════════════════════════════════════════
+// FEATURE 6: ALARM
+// ═══════════════════════════════════════════════════════
+let alarmAudioLoop=null;
+socket.on('alarm-ring',({label,createdBy,channelId})=>{
+  // Mostrar toast
+  $('alarm-title').textContent=label||'⏰ ALARMA';
+  $('alarm-by').textContent='Programada por '+createdBy;
+  $('alarm-toast').classList.add('on');
+  // Beep loop
+  let times=0;
+  alarmAudioLoop=setInterval(()=>{
+    beep(880,.15,.3);setTimeout(()=>beep(1100,.15,.3),200);
+    if(++times>8)clearInterval(alarmAudioLoop);
+  },600);
+  // Vibración en móvil
+  if(navigator.vibrate) navigator.vibrate([200,100,200,100,400]);
+});
+function dismissAlarm(){
+  $('alarm-toast').classList.remove('on');
+  clearInterval(alarmAudioLoop);
+}
+
+// ═══════════════════════════════════════════════════════
+// FEATURE 7: COLLABORATIVE CANVAS / DRAW
+// ═══════════════════════════════════════════════════════
+let cvTool='draw', cvColor='#ff4466', cvDrawing=false, cvLastX=0, cvLastY=0;
+let cvCtx=null, cvEl=null;
+
+socket.on('open-canvas',({channelId})=>{
+  if(String(channelId)!==chIdStr())return;
+  openCanvas();
+});
+socket.on('canvas-state',({channelId,strokes})=>{
+  if(String(channelId)!==chIdStr())return;
+  if(!cvCtx)return;
+  strokes.forEach(s=>drawStroke(s));
+});
+socket.on('canvas-stroke',({stroke,channelId})=>{
+  if(String(channelId)!==chIdStr())return;
+  drawStroke(stroke);
+});
+socket.on('canvas-cleared',({channelId})=>{
+  if(String(channelId)!==chIdStr())return;
+  if(cvCtx) cvCtx.clearRect(0,0,cvEl.width,cvEl.height);
+});
+
+function openCanvas(){
+  $('canvas-wrap').classList.add('open');
+  cvEl=$('draw-canvas');
+  cvCtx=cvEl.getContext('2d');
+  // Reescalar para retina
+  const dpr=window.devicePixelRatio||1;
+  // Draw events
+  cvEl.onmousedown=startDraw; cvEl.onmousemove=draw; cvEl.onmouseup=endDraw; cvEl.onmouseleave=endDraw;
+  cvEl.ontouchstart=e=>{e.preventDefault();const t=e.touches[0];startDraw({offsetX:t.clientX-cvEl.getBoundingClientRect().left,offsetY:t.clientY-cvEl.getBoundingClientRect().top});};
+  cvEl.ontouchmove=e=>{e.preventDefault();const t=e.touches[0];draw({offsetX:t.clientX-cvEl.getBoundingClientRect().left,offsetY:t.clientY-cvEl.getBoundingClientRect().top});};
+  cvEl.ontouchend=endDraw;
+  // Load existing strokes
+  socket.emit('join-channel',{channelId:chIdStr()}); // re-request canvas-state
+}
+function closeCanvas(){$('canvas-wrap').classList.remove('open');}
+function setCvColor(el){document.querySelectorAll('.cv-color').forEach(e=>e.classList.remove('active'));el.classList.add('active');cvColor=el.dataset.color;}
+function setCvTool(tool){cvTool=tool;$('cv-draw-btn').classList.toggle('active',tool==='draw');$('cv-erase-btn').classList.toggle('active',tool==='erase');}
+function clearCanvas(){socket.emit('canvas-clear',{channelId:chIdStr()});if(cvCtx)cvCtx.clearRect(0,0,cvEl.width,cvEl.height);}
+function startDraw(e){cvDrawing=true;cvLastX=e.offsetX;cvLastY=e.offsetY;}
+function endDraw(){cvDrawing=false;}
+function draw(e){
+  if(!cvDrawing||!cvCtx)return;
+  const size=parseInt($('cv-size').value)||3;
+  const stroke={x1:cvLastX,y1:cvLastY,x2:e.offsetX,y2:e.offsetY,color:cvTool==='erase'?'#FFFFFF':cvColor,size:cvTool==='erase'?size*4:size};
+  drawStroke(stroke);
+  socket.emit('canvas-stroke',{channelId:chIdStr(),stroke});
+  cvLastX=e.offsetX; cvLastY=e.offsetY;
+}
+function drawStroke(s){
+  if(!cvCtx)return;
+  cvCtx.beginPath();
+  cvCtx.moveTo(s.x1,s.y1);
+  cvCtx.lineTo(s.x2,s.y2);
+  cvCtx.strokeStyle=s.color;
+  cvCtx.lineWidth=s.size||3;
+  cvCtx.lineCap='round';
+  cvCtx.stroke();
+}
+
+// ═══════════════════════════════════════════════════════
+// FEATURE 8: PARTYDO — host-controlled shared view
+// ═══════════════════════════════════════════════════════
+let partydoSocketId=null; // mi socket id (recibido en auth-ok si lo emitimos)
+// El partydo usa type:'partydo' en watch-state
+// createYtWP ya maneja type='partydo' como iframe de /partydo-view
+
+// En watch-state handler, detectar partydo host
+const _origWatchState = socket.listeners ? null : null; // patch below
+
+// ═══════════════════════════════════════════════════════
+// FEATURE 9: CONTEXT MENU (right-click on messages)
+// ═══════════════════════════════════════════════════════
+let ctxMsgId=null, ctxMsgContent='', ctxMsgAuthor='';
+document.addEventListener('contextmenu',e=>{
+  const msgGrp=e.target.closest('.msg-grp');
+  if(!msgGrp||!msgGrp.dataset.mid)return;
+  e.preventDefault();
+  ctxMsgId=msgGrp.dataset.mid;
+  ctxMsgContent=msgGrp.dataset.content||'';
+  ctxMsgAuthor=msgGrp.querySelector('.msg-name')?.textContent||'';
+  const menu=$('ctx-menu');
+  const isMe=ctxMsgAuthor===myUser?.username;
+  const isAdmin=isServerAdmin();
+  $('ctx-edit').style.display=isMe?'flex':'none';
+  $('ctx-delete').style.display=(isMe||isAdmin)?'flex':'none';
+  menu.style.display='block';
+  // Position
+  const x=Math.min(e.clientX,window.innerWidth-160);
+  const y=Math.min(e.clientY,window.innerHeight-160);
+  menu.style.left=x+'px'; menu.style.top=y+'px';
+});
+// Long press for mobile
+let longPressTO=null;
+document.addEventListener('touchstart',e=>{
+  const msgGrp=e.target.closest('.msg-grp');
+  if(!msgGrp||!msgGrp.dataset.mid)return;
+  longPressTO=setTimeout(()=>{
+    ctxMsgId=msgGrp.dataset.mid;
+    ctxMsgContent=msgGrp.dataset.content||'';
+    ctxMsgAuthor=msgGrp.querySelector('.msg-name')?.textContent||'';
+    const isMe=ctxMsgAuthor===myUser?.username;
+    const isAdmin=isServerAdmin();
+    $('ctx-edit').style.display=isMe?'flex':'none';
+    $('ctx-delete').style.display=(isMe||isAdmin)?'flex':'none';
+    const menu=$('ctx-menu');
+    const t=e.touches[0];
+    menu.style.display='block';
+    menu.style.left=Math.min(t.clientX,window.innerWidth-160)+'px';
+    menu.style.top=Math.min(t.clientY,window.innerHeight-180)+'px';
+  },500);
+},{passive:true});
+document.addEventListener('touchend',()=>{clearTimeout(longPressTO);},{passive:true});
+document.addEventListener('click',()=>{$('ctx-menu').style.display='none';$('pins-panel-dropdown').style.display='none';});
+function ctxAction(action){
+  $('ctx-menu').style.display='none';
+  if(!ctxMsgId)return;
+  if(action==='reply') startReply(ctxMsgId,ctxMsgContent);
+  else if(action==='react') showRxnFor(ctxMsgId,chIdStr());
+  else if(action==='pin') pinMessage(ctxMsgId);
+  else if(action==='edit') editMsg(ctxMsgId);
+  else if(action==='delete') deleteMsg(ctxMsgId);
+}
+
+// ═══════════════════════════════════════════════════════
+// FEATURE 10: SNAPSHOT DOWNLOAD
+// ═══════════════════════════════════════════════════════
+function downloadSnapshot(){
+  const chId=_chId(); if(!chId)return;
+  window.open(`/api/channels/${chId}/snapshot`,'_blank');
+}
+
+// ═══════════════════════════════════════════════════════
+// PARTYDO UI — handle type='partydo' in watch-state
+// ═══════════════════════════════════════════════════════
+// Patch the createYtWP to handle partydo
+const _origCreateYtWP = createYtWP;
+function createYtWP(videoId, startTime, shouldPlay){
+  // If called with null videoId and wpType==='partydo', make partydo iframe
+  if(wpType==='partydo'||(!videoId&&wpType==='partydo')){
+    createPartydoView();
+    return;
+  }
+  _origCreateYtWP(videoId, startTime, shouldPlay);
+}
+function createPartydoView(){
+  wpReady=true; wpIframe=null;
+  if(wpPlayer){try{wpPlayer.destroy();}catch{}wpPlayer=null;}
+  const wrap=$('wp-video'); wrap.innerHTML=''; wrap.style.position='relative';
+  wrap.innerHTML=`<iframe src="/partydo-view" style="position:absolute;inset:0;width:100%;height:100%;border:none;"
+    allow="fullscreen;autoplay;encrypted-media"
+    sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation allow-top-navigation-by-user-activation">
+  </iframe>`;
+  // Solo el host puede parar — ocultar botón pause para los demás
+  // (el host es quien emitió /partydo, sabemos por partydoHost en watch-state)
+}
+
+// Override watch-state socket handler to detect partydo
+socket.on('watch-state',({channelId,active,type,videoId,url,title,playing,currentTime,lastSync,partydoHost})=>{
+  const myCh=chIdStr();
+  if(channelId&&myCh&&String(channelId)!==myCh)return;
+  if(!active){if(wpActive)leaveWPLocal();return;}
+  const isNew=!wpActive||wpVid!==videoId||wpType!==type;
+  wpActive=true; wpVid=videoId; wpType=type; wpPlaying=playing;
+  const elapsed=playing?(Date.now()-lastSync)/1000:0;
+  const syncTime=Math.max(0,(currentTime||0)+elapsed);
+  $('wp-title-bar').textContent=title||'Watch Party';
+  updateWpBtns();
+  $('wp-open-btn').classList.add('live'); $('wp-open-btn').textContent='🔴 LIVE';
+  if($('mob-wp-btn')) $('mob-wp-btn').textContent='🔴';
+  if(isNew){
+    if(type==='partydo') createPartydoView();
+    else if(type==='iframe') createIframeWP(url);
+    else createYtWP(videoId,syncTime,playing);
+  }
+  // Ocultar play/pause si es partydo (no controlable por no-host)
+  const playBtn=$('wp-play-btn');
+  if(type==='partydo'&&playBtn) playBtn.style.display='none';
+  else if(playBtn) playBtn.style.display='';
+  showView('watch');
+  const msgs=$('messages');
+  const wpMsgs=$('wp-messages');
+  if(wpMsgs&&msgs) wpMsgs.innerHTML=msgs.innerHTML;
+});
+
+<!-- Canvas draw overlay -->
+<div class="canvas-wrap" id="canvas-wrap">
+  <div class="canvas-toolbar">
+    <span style="font-size:.78rem;color:var(--muted);font-family:'Space Mono',monospace;">🎨 PIZARRA</span>
+    <div id="cv-colors" style="display:flex;gap:4px;">
+      <div class="cv-color active" style="background:#ff4466;" data-color="#ff4466" onclick="setCvColor(this)"></div>
+      <div class="cv-color" style="background:#39ffc0;" data-color="#39ffc0" onclick="setCvColor(this)"></div>
+      <div class="cv-color" style="background:#a8d8ff;" data-color="#a8d8ff" onclick="setCvColor(this)"></div>
+      <div class="cv-color" style="background:#ffd166;" data-color="#ffd166" onclick="setCvColor(this)"></div>
+      <div class="cv-color" style="background:#c084fc;" data-color="#c084fc" onclick="setCvColor(this)"></div>
+      <div class="cv-color" style="background:#ffffff;" data-color="#ffffff" onclick="setCvColor(this)"></div>
+      <div class="cv-color" style="background:#000000;" data-color="#000000" onclick="setCvColor(this)"></div>
+    </div>
+    <input type="range" min="1" max="20" value="3" id="cv-size" style="width:60px;accent-color:var(--ice);"/>
+    <button class="cv-btn active" id="cv-draw-btn" onclick="setCvTool('draw')">✏️ Dibujar</button>
+    <button class="cv-btn" id="cv-erase-btn" onclick="setCvTool('erase')">⬜ Borrar</button>
+    <button class="cv-btn" onclick="clearCanvas()">🗑 Limpiar</button>
+    <button class="cv-btn" onclick="closeCanvas()">✕ Cerrar</button>
   </div>
-  <canvas id="draw-canvas" width="900" height="500" style="background:#1a1a22;border-radius:8px;cursor:crosshair;max-width:100%;touch-action:none;border:1px solid var(--line);"></canvas>
-  <div style="font-size:.65rem;color:var(--muted);font-family:'Space Mono',monospace;">Pizarra colaborativa · Todos los que están en este canal pueden dibujar</div>
+  <canvas id="draw-canvas" width="900" height="500"></canvas>
+  <div style="font-size:.7rem;color:var(--muted);">Todos en el canal pueden dibujar en tiempo real</div>
 </div>
 
-<!-- ═══ ALARM TOAST ════════════════════════════════════════ -->
-<div id="alarm-toast" style="position:fixed;top:20px;right:20px;background:var(--bg2);border:2px solid var(--gold);border-radius:14px;padding:16px 20px;z-index:400;display:none;flex-direction:column;align-items:center;gap:5px;box-shadow:0 8px 32px rgba(0,0,0,.6);min-width:200px;text-align:center;">
+<!-- Alarm toast -->
+<div class="alarm-toast" id="alarm-toast">
   <div style="font-size:2rem;">⏰</div>
-  <div id="alarm-title" style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:3px;color:var(--gold);">ALARMA</div>
-  <div id="alarm-by" style="font-size:.72rem;color:var(--muted);"></div>
-  <button onclick="dismissAlarm()" style="margin-top:6px;padding:6px 20px;background:var(--ice);border:none;border-radius:8px;color:#0a0a0c;cursor:pointer;font-weight:700;font-size:.82rem;">OK</button>
+  <div class="alarm-title" id="alarm-title">ALARMA</div>
+  <div style="font-size:.75rem;color:var(--muted);" id="alarm-by"></div>
+  <button class="btn-ok" style="margin-top:6px;padding:6px 20px;" onclick="dismissAlarm()">OK</button>
 </div>
 
-<!-- ═══ CTX MENU ═══════════════════════════════════════════ -->
-<div id="ctx-menu" style="position:fixed;background:var(--bg2);border:1px solid var(--line);border-radius:10px;z-index:200;display:none;min-width:160px;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,.6);">
-  <div onclick="ctxAction('reply')" style="padding:9px 14px;cursor:pointer;font-size:.82rem;transition:background .15s;" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">↩ Responder</div>
-  <div onclick="ctxAction('react')" style="padding:9px 14px;cursor:pointer;font-size:.82rem;transition:background .15s;" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">😊 Reaccionar</div>
-  <div onclick="ctxAction('pin')" style="padding:9px 14px;cursor:pointer;font-size:.82rem;transition:background .15s;" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">📌 Fijar</div>
-  <div id="ctx-edit" onclick="ctxAction('edit')" style="padding:9px 14px;cursor:pointer;font-size:.82rem;transition:background .15s;display:none;" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">✏️ Editar</div>
-  <div id="ctx-delete" onclick="ctxAction('delete')" style="padding:9px 14px;cursor:pointer;font-size:.82rem;color:var(--red);transition:background .15s;display:none;" onmouseover="this.style.background='rgba(255,68,102,.1)'" onmouseout="this.style.background=''">🗑 Eliminar</div>
+<!-- Context menu -->
+<div id="ctx-menu">
+  <div class="ctx-item" id="ctx-reply" onclick="ctxAction('reply')">↩ Responder</div>
+  <div class="ctx-item" id="ctx-react" onclick="ctxAction('react')">😊 Reaccionar</div>
+  <div class="ctx-item" id="ctx-pin" onclick="ctxAction('pin')">📌 Fijar mensaje</div>
+  <div class="ctx-item" id="ctx-edit" onclick="ctxAction('edit')" style="display:none;">✏️ Editar</div>
+  <div class="ctx-item danger" id="ctx-delete" onclick="ctxAction('delete')" style="display:none;">🗑 Eliminar</div>
 </div>
 
+<script src="/socket.io/socket.io.js"></script>
 </body>
 </html>
