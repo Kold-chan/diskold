@@ -293,6 +293,45 @@ html,body{height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(
   /* En watch party, el chat del canal va debajo del video */
   #watch-view .wp-chat .msgs{flex:1;}
 }
+
+/* ── MINIJUEGOS ──────────────────────────────────────── */
+.game-overlay{position:fixed;inset:0;background:rgba(0,0,0,.93);display:none;flex-direction:column;align-items:center;justify-content:center;z-index:900;gap:10px;padding:16px;overflow-y:auto;}
+.game-overlay.on{display:flex;}
+.game-box{background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;align-items:center;gap:10px;width:100%;max-width:480px;}
+.game-title{font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:4px;color:var(--ice);}
+.game-score-bar{font-family:'Space Mono',monospace;font-size:.75rem;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap;justify-content:center;}
+.game-btn{background:var(--bg3);border:1px solid var(--line);border-radius:8px;color:var(--text);cursor:pointer;padding:7px 14px;font-size:.82rem;transition:all .2s;}
+.game-btn:hover{border-color:var(--ice);color:var(--ice);}
+.game-btn.prim{background:var(--ice);color:#0a0a0c;border:none;font-weight:700;}
+/* Snake */
+#snake-canvas{border-radius:6px;display:block;image-rendering:pixelated;}
+/* Trivia */
+.trivia-q{font-size:.92rem;font-weight:600;text-align:center;line-height:1.5;margin-bottom:6px;}
+.trivia-opts{display:grid;grid-template-columns:1fr 1fr;gap:7px;width:100%;}
+.trivia-opt{background:var(--bg3);border:1px solid var(--line);border-radius:8px;padding:10px;cursor:pointer;font-size:.8rem;text-align:center;transition:all .2s;line-height:1.3;}
+.trivia-opt:hover{border-color:var(--ice);}
+.trivia-opt.correct{border-color:var(--green)!important;background:rgba(57,255,192,.1);color:var(--green);}
+.trivia-opt.wrong{border-color:var(--red)!important;background:rgba(255,68,102,.1);color:var(--red);}
+.trivia-opt.revealed{border-color:var(--green)!important;background:rgba(57,255,192,.08);}
+/* Wordle */
+.wordle-grid{display:flex;flex-direction:column;gap:4px;margin:6px 0;}
+.wordle-row{display:flex;gap:4px;}
+.wordle-cell{width:42px;height:42px;border:2px solid var(--line);border-radius:6px;display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:1.3rem;transition:all .3s;}
+.wordle-cell.correct{background:#2d5a27;border-color:var(--green);}
+.wordle-cell.present{background:#5a4a10;border-color:var(--gold);}
+.wordle-cell.absent{background:var(--bg3);border-color:var(--muted);color:var(--muted);}
+.wordle-cell.active{border-color:var(--ice);}
+.wordle-kb{display:flex;flex-direction:column;gap:4px;align-items:center;}
+.wordle-kb-row{display:flex;gap:3px;}
+.wordle-key{background:var(--bg3);border:1px solid var(--line);border-radius:4px;color:var(--text);cursor:pointer;padding:7px 6px;font-size:.72rem;font-family:'Space Mono',monospace;min-width:26px;text-align:center;transition:background .3s;}
+.wordle-key.correct{background:#2d5a27;border-color:var(--green);}
+.wordle-key.present{background:#5a4a10;border-color:var(--gold);}
+.wordle-key.absent{background:#111;color:var(--muted);}
+/* Type Race */
+.typerace-text{font-size:.88rem;line-height:1.8;font-family:'Space Mono',monospace;padding:10px 14px;background:var(--bg3);border-radius:8px;width:100%;word-break:break-word;letter-spacing:.5px;}
+.typerace-char.correct{color:var(--green);}
+.typerace-char.wrong{color:var(--red);text-decoration:underline;}
+.typerace-char.cursor{border-left:2px solid var(--ice);}
 </style>
 </head>
 <body>
@@ -392,6 +431,7 @@ html,body{height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(
       <span style="font-weight:700;font-size:.85rem;" id="mob-title">Diskold</span>
       <div style="margin-left:auto;display:flex;gap:4px;">
         <button class="tb-btn" onclick="openWatchModal()" id="mob-wp-btn">🎬</button>
+        <button class="tb-btn" onclick="openGamesMenu()">🎮</button>
         <button class="tb-btn" onclick="toggleMemberPanel()">👥</button>
       </div>
     </div>
@@ -423,6 +463,7 @@ html,body{height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(
         <span class="topbar-ch"><span class="sym" id="ch-sym">#</span><span id="ch-name-top">general</span></span>
         <div class="topbar-right">
           <button class="tb-btn" id="wp-open-btn" onclick="openWatchModal()">🎬 Watch Party</button>
+          <button class="tb-btn" onclick="openGamesMenu()" title="Minijuegos">🎮</button>
           <button class="tb-btn" onclick="toggleMemberPanel()">👥</button>
         </div>
       </div>
@@ -619,7 +660,7 @@ const socket = io();
 let myToken=null, myUser=null;
 let currentServer=null, currentChannel=null;
 let dmWithId=null, dmWithUser=null;
-let inVoice=false, micMuted=false;
+let inVoice=false, voiceChId=null, micMuted=false;
 let localStream=null; const peers={};
 let memberPanelOpen=false;
 // Watch Party
@@ -1482,68 +1523,333 @@ function stopMusic(){socket.emit('send-message',{channelId:chIdStr(),content:'/s
 function setVolume(v){socket.emit('send-message',{channelId:chIdStr(),content:`/volume ${v}`,attachments:[]});}
 
 // ═══════════════════════════════════════════════════════
-// VOICE
 // ═══════════════════════════════════════════════════════
-const ICE={iceServers:[{urls:'stun:stun.l.google.com:19302'}]};
-let voiceChId=null;
-async function joinVoiceCh(chId){
-  if(inVoice&&voiceChId===chId){leaveVoice();return;}
-  if(inVoice)leaveVoice();
-  try{localStream=await navigator.mediaDevices.getUserMedia({audio:true,video:false});}
-  catch{alert('Sin acceso al micrófono.');return;}
-  inVoice=true;voiceChId=chId;
-  socket.emit('join-voice',{channelId:chId});
+// VOICE — Hardened WebRTC con keepalive + burbuja Android
+// ═══════════════════════════════════════════════════════
+const ICE = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+  ],
+  iceCandidatePoolSize: 10,
+};
+let voiceChId = null;
+let voiceKeepaliveInterval = null;
+let wakeLockObj = null;
+let bgAudioCtx = null;
+let bgSilentNode = null;
+
+// Mantener audio activo en background con un nodo silencioso
+function startBgAudioKeepAlive() {
+  try {
+    if (!bgAudioCtx) bgAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (bgAudioCtx.state === 'suspended') bgAudioCtx.resume();
+    // Nodo oscilador a 0 volumen — engaña al browser para no suspender audio
+    if (!bgSilentNode) {
+      const osc = bgAudioCtx.createOscillator();
+      const gain = bgAudioCtx.createGain();
+      gain.gain.value = 0.0001;
+      osc.connect(gain);
+      gain.connect(bgAudioCtx.destination);
+      osc.start();
+      bgSilentNode = osc;
+    }
+  } catch(e) {}
 }
-socket.on('voice-joined',({channelId})=>{
-  voiceChId=channelId;
-  const ch=currentServer?.channels.find(c=>String(c._id)===String(channelId));
+function stopBgAudioKeepAlive() {
+  try { if(bgSilentNode) { bgSilentNode.stop(); bgSilentNode = null; } } catch(e){}
+}
+
+async function acquireWakeLock() {
+  try {
+    if ('wakeLock' in navigator) {
+      wakeLockObj = await navigator.wakeLock.request('screen');
+      wakeLockObj.addEventListener('release', () => { wakeLockObj = null; });
+    }
+  } catch(e) {}
+}
+
+async function joinVoiceCh(chId) {
+  if (inVoice && voiceChId === chId) { leaveVoice(); return; }
+  if (inVoice) leaveVoice();
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+        sampleRate: 48000,
+      },
+      video: false
+    });
+  } catch(e) { alert('Sin acceso al micrófono: ' + e.message); return; }
+  inVoice = true; voiceChId = chId;
+  socket.emit('join-voice', { channelId: chId });
+  startBgAudioKeepAlive();
+  await acquireWakeLock();
+  // Keepalive: ping cada 20s para mantener conexión activa
+  clearInterval(voiceKeepaliveInterval);
+  voiceKeepaliveInterval = setInterval(() => {
+    if (!inVoice) { clearInterval(voiceKeepaliveInterval); return; }
+    socket.emit('voice-ping', { channelId: voiceChId });
+    // Revisar peers desconectados y reconectar
+    for (const [peerId, pc] of Object.entries(peers)) {
+      const state = pc.connectionState || pc.iceConnectionState;
+      if (state === 'failed' || state === 'disconnected') {
+        console.log('Reconectando peer', peerId, state);
+        // ICE restart
+        pc.restartIce ? pc.restartIce() : pc.createOffer({iceRestart:true}).then(o => pc.setLocalDescription(o).then(()=>socket.emit('offer',{to:peerId,offer:o}))).catch(()=>{});
+      }
+    }
+  }, 20000);
+  showVoiceBubble();
+}
+
+socket.on('voice-joined', ({channelId}) => {
+  voiceChId = channelId;
+  const ch = currentServer?.channels.find(c => String(c._id) === String(channelId));
   $('call-bar').classList.add('on');
-  $('call-ch-name').textContent=ch?.name||'Voz';
-  document.querySelectorAll('.v-item').forEach(e=>e.classList.remove('active'));
-  $(`vi-${channelId}`)?.classList.add('active');
+  $('call-ch-name').textContent = ch?.name || 'Voz';
+  document.querySelectorAll('.v-item').forEach(e => e.classList.remove('active'));
+  $('vi-'+channelId)?.classList.add('active');
   sndJoin();
+  updateBubble();
 });
-function leaveVoice(){
-  inVoice=false;
-  if(localStream){localStream.getTracks().forEach(t=>t.stop());localStream=null;}
-  Object.values(peers).forEach(pc=>pc.close());
-  Object.keys(peers).forEach(k=>delete peers[k]);
+
+function leaveVoice() {
+  inVoice = false;
+  clearInterval(voiceKeepaliveInterval);
+  stopBgAudioKeepAlive();
+  try { if(wakeLockObj) wakeLockObj.release(); } catch(e){}
+  if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+  Object.values(peers).forEach(pc => { try{pc.close();}catch(e){} });
+  Object.keys(peers).forEach(k => delete peers[k]);
   document.getElementById('remote-audios')?.remove();
   $('call-bar').classList.remove('on');
-  document.querySelectorAll('.v-item').forEach(e=>e.classList.remove('active'));
-  const old=voiceChId;voiceChId=null;
-  socket.emit('leave-voice');sndLeave();
+  document.querySelectorAll('.v-item').forEach(e => e.classList.remove('active'));
+  voiceChId = null;
+  socket.emit('leave-voice');
+  sndLeave();
+  hideVoiceBubble();
 }
-function toggleMic(){
-  if(!localStream)return;
-  micMuted=!micMuted;
-  localStream.getAudioTracks().forEach(t=>t.enabled=!micMuted);
-  const b=$('mic-btn');b.textContent=micMuted?'🔇':'🎤';b.classList.toggle('muted',micMuted);
-  socket.emit('voice-mute',{muted:micMuted});
-  micMuted?sndMute():sndUnmute();
+
+function toggleMic() {
+  if (!localStream) return;
+  micMuted = !micMuted;
+  localStream.getAudioTracks().forEach(t => t.enabled = !micMuted);
+  const b = $('mic-btn'); b.textContent = micMuted ? '🔇' : '🎤'; b.classList.toggle('muted', micMuted);
+  socket.emit('voice-mute', { muted: micMuted });
+  micMuted ? sndMute() : sndUnmute();
+  updateBubble();
 }
-socket.on('voice-users',({channelId,users})=>{
-  const el=$('vu-'+channelId);if(!el)return;
-  el.innerHTML=users.map(u=>`<div class="v-user"><span>👤</span><span>${esc(u.username)}</span></div>`).join('');
+
+socket.on('voice-users', ({channelId, users}) => {
+  const el = $('vu-'+channelId); if(!el) return;
+  el.innerHTML = users.map(u => `<div class="v-user"><span>${u.muted?'🔇':'👤'}</span><span>${esc(u.username)}</span></div>`).join('');
+  updateBubble(users.length);
 });
-socket.on('existing-peers',async ids=>{for(const id of ids)await createPC(id,true);});
-socket.on('peer-joined',async({peerId})=>{sndJoin();await createPC(peerId,false);});
-socket.on('peer-left',id=>{sndLeave();if(peers[id]){peers[id].close();delete peers[id];}document.getElementById('raud-'+id)?.remove();});
-socket.on('offer',   async({from,offer}) =>{if(!peers[from])await createPC(from,false);await peers[from].setRemoteDescription(new RTCSessionDescription(offer));const a=await peers[from].createAnswer();await peers[from].setLocalDescription(a);socket.emit('answer',{to:from,answer:a});});
-socket.on('answer',  async({from,answer})=>{if(peers[from])await peers[from].setRemoteDescription(new RTCSessionDescription(answer));});
-socket.on('ice-candidate',async({from,candidate})=>{if(peers[from]&&candidate)try{await peers[from].addIceCandidate(new RTCIceCandidate(candidate));}catch{}});
-async function createPC(peerId,init){
-  const pc=new RTCPeerConnection(ICE);peers[peerId]=pc;
-  if(localStream)localStream.getTracks().forEach(t=>pc.addTrack(t,localStream));
-  pc.onicecandidate=({candidate})=>candidate&&socket.emit('ice-candidate',{to:peerId,candidate});
-  pc.ontrack=e=>{
-    if(!document.getElementById('remote-audios')){const c=document.createElement('div');c.id='remote-audios';c.style.display='none';document.body.appendChild(c);}
-    let a=document.getElementById('raud-'+peerId);
-    if(!a){a=document.createElement('audio');a.id='raud-'+peerId;a.autoplay=true;document.getElementById('remote-audios').appendChild(a);}
-    a.srcObject=e.streams[0];
+
+// WebRTC peer handling
+socket.on('existing-peers', async ids => { for (const id of ids) await createPC(id, true); });
+socket.on('peer-joined', async ({peerId}) => { sndJoin(); await createPC(peerId, false); });
+socket.on('peer-left', id => {
+  sndLeave();
+  if(peers[id]) { try{peers[id].close();}catch(e){} delete peers[id]; }
+  document.getElementById('raud-'+id)?.remove();
+  updateBubble();
+});
+socket.on('offer', async ({from, offer}) => {
+  if (!peers[from]) await createPC(from, false);
+  try {
+    await peers[from].setRemoteDescription(new RTCSessionDescription(offer));
+    const a = await peers[from].createAnswer();
+    await peers[from].setLocalDescription(a);
+    socket.emit('answer', { to: from, answer: a });
+  } catch(e) {}
+});
+socket.on('answer', async ({from, answer}) => {
+  if (peers[from]) try { await peers[from].setRemoteDescription(new RTCSessionDescription(answer)); } catch(e) {}
+});
+socket.on('ice-candidate', async ({from, candidate}) => {
+  if (peers[from] && candidate) try { await peers[from].addIceCandidate(new RTCIceCandidate(candidate)); } catch(e) {}
+});
+
+async function createPC(peerId, init) {
+  const pc = new RTCPeerConnection(ICE);
+  peers[peerId] = pc;
+  if (localStream) localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+  pc.onicecandidate = ({candidate}) => candidate && socket.emit('ice-candidate', { to: peerId, candidate });
+
+  // Reconexión automática al detectar fallo
+  pc.onconnectionstatechange = () => {
+    const state = pc.connectionState;
+    if ((state === 'failed' || state === 'disconnected') && inVoice) {
+      setTimeout(async () => {
+        if (!peers[peerId] || !inVoice) return;
+        try {
+          const offer = await pc.createOffer({ iceRestart: true });
+          await pc.setLocalDescription(offer);
+          socket.emit('offer', { to: peerId, offer });
+        } catch(e) {}
+      }, 2000);
+    }
   };
-  if(init){const o=await pc.createOffer();await pc.setLocalDescription(o);socket.emit('offer',{to:peerId,offer:o});}
+
+  pc.ontrack = e => {
+    if (!document.getElementById('remote-audios')) {
+      const c = document.createElement('div');
+      c.id = 'remote-audios'; c.style.display = 'none';
+      document.body.appendChild(c);
+    }
+    let a = document.getElementById('raud-'+peerId);
+    if (!a) {
+      a = document.createElement('audio');
+      a.id = 'raud-'+peerId;
+      a.autoplay = true;
+      a.setAttribute('playsinline', '');
+      document.getElementById('remote-audios').appendChild(a);
+    }
+    a.srcObject = e.streams[0];
+    // En iOS/Android hay que llamar play() manualmente
+    a.play().catch(() => {});
+  };
+
+  if (init) {
+    try {
+      const o = await pc.createOffer();
+      await pc.setLocalDescription(o);
+      socket.emit('offer', { to: peerId, offer: o });
+    } catch(e) {}
+  }
   return pc;
+}
+
+// Reanudar audio al volver a primer plano
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState === 'visible') {
+    // Reanudar AudioContext
+    if (bgAudioCtx && bgAudioCtx.state === 'suspended') bgAudioCtx.resume();
+    // Re-play todos los audios remotos
+    document.querySelectorAll('[id^="raud-"]').forEach(a => { a.play().catch(()=>{}); });
+    // Re-adquirir wake lock
+    if (inVoice && !wakeLockObj) acquireWakeLock();
+    // Reanudar música YT
+    if (currentSongId && ytPlayer?.playVideo) try { ytPlayer.playVideo(); } catch(e) {}
+    // Pedir re-sync de peers si llevamos > 5s en background
+    if (inVoice) {
+      setTimeout(() => {
+        for (const [peerId, pc] of Object.entries(peers)) {
+          const state = pc.connectionState || pc.iceConnectionState;
+          if (state === 'failed' || state === 'disconnected' || state === 'checking') {
+            pc.restartIce ? pc.restartIce() : null;
+          }
+        }
+      }, 1000);
+    }
+  } else {
+    // Entrando en background — asegurar que el stream sigue activo
+    if (inVoice && localStream) {
+      localStream.getAudioTracks().forEach(t => {
+        if (!t.enabled && !micMuted) t.enabled = true;
+      });
+    }
+  }
+});
+
+// ── BURBUJA FLOTANTE (overlay en background) ────────────
+let bubbleVisible = false;
+function showVoiceBubble() {
+  let b = $('voice-bubble');
+  if (!b) {
+    b = document.createElement('div');
+    b.id = 'voice-bubble';
+    b.style.cssText = [
+      'position:fixed',
+      'bottom:90px',
+      'right:16px',
+      'width:56px',
+      'height:56px',
+      'background:var(--bg2)',
+      'border:2px solid var(--green)',
+      'border-radius:50%',
+      'display:flex',
+      'flex-direction:column',
+      'align-items:center',
+      'justify-content:center',
+      'z-index:9999',
+      'cursor:pointer',
+      'box-shadow:0 4px 20px rgba(57,255,192,.4)',
+      'transition:all .2s',
+      'user-select:none',
+    ].join(';');
+    b.innerHTML = '<div id="bubble-icon" style="font-size:1.4rem;">🎤</div><div id="bubble-count" style="font-size:.55rem;color:var(--green);font-family:Space Mono,monospace;"></div>';
+    // Tap → expandir mini-panel
+    b.addEventListener('click', toggleBubblePanel);
+    // Drag support
+    let ox=0,oy=0,dragging=false;
+    const dragStart = e => { const src=e.touches?e.touches[0]:e; ox=src.clientX-b.offsetLeft; oy=src.clientY-b.offsetTop; dragging=false; };
+    const dragMove = e => {
+      const src=e.touches?e.touches[0]:e;
+      const dx=src.clientX-ox, dy=src.clientY-oy;
+      if(Math.abs(dx-b.offsetLeft)+Math.abs(dy-b.offsetTop)>5)dragging=true;
+      b.style.left=Math.max(0,Math.min(window.innerWidth-60,src.clientX-ox))+'px';
+      b.style.top=Math.max(0,Math.min(window.innerHeight-60,src.clientY-oy))+'px';
+      b.style.right='auto'; b.style.bottom='auto';
+      e.preventDefault();
+    };
+    b.addEventListener('mousedown', dragStart);
+    b.addEventListener('touchstart', dragStart, {passive:true});
+    document.addEventListener('mousemove', dragMove);
+    document.addEventListener('touchmove', dragMove, {passive:false});
+    document.addEventListener('mouseup', ()=>dragging=false);
+    document.addEventListener('touchend', ()=>dragging=false);
+    document.body.appendChild(b);
+  }
+  b.style.display = 'flex';
+  bubbleVisible = true;
+}
+function hideVoiceBubble() {
+  const b = $('voice-bubble');
+  if (b) b.style.display = 'none';
+  const p = $('bubble-panel');
+  if (p) p.remove();
+  bubbleVisible = false;
+}
+function updateBubble(userCount) {
+  const icon = $('bubble-icon');
+  const count = $('bubble-count');
+  if (icon) icon.textContent = micMuted ? '🔇' : '🎤';
+  if (count) count.textContent = userCount != null ? userCount+'p' : '';
+  const b = $('voice-bubble');
+  if (b) b.style.borderColor = micMuted ? 'var(--red)' : 'var(--green)';
+}
+function toggleBubblePanel() {
+  let p = $('bubble-panel');
+  if (p) { p.remove(); return; }
+  const b = $('voice-bubble');
+  p = document.createElement('div');
+  p.id = 'bubble-panel';
+  const br = b.getBoundingClientRect();
+  p.style.cssText = 'position:fixed;background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:12px 14px;z-index:9998;display:flex;flex-direction:column;gap:8px;box-shadow:0 8px 28px rgba(0,0,0,.7);min-width:160px;';
+  p.style.bottom = (window.innerHeight - br.top + 8) + 'px';
+  p.style.right = (window.innerWidth - br.right - br.width/2) + 'px';
+  const chName = $('call-ch-name')?.textContent || 'Voz';
+  p.innerHTML = `
+    <div style="font-size:.72rem;color:var(--green);font-family:'Space Mono',monospace;letter-spacing:1px;">🟢 EN LLAMADA</div>
+    <div style="font-size:.82rem;font-weight:700;">${esc(chName)}</div>
+    <button onclick="toggleMic();document.getElementById('bubble-panel')?.remove();" style="background:${micMuted?'rgba(255,68,102,.15)':'var(--bg3)'};border:1px solid ${micMuted?'var(--red)':'var(--line)'};border-radius:8px;padding:7px;color:var(--text);cursor:pointer;font-size:.82rem;text-align:left;">
+      ${micMuted?'🔇 Activar mic':'🎤 Silenciar'}
+    </button>
+    <button onclick="leaveVoice();document.getElementById('bubble-panel')?.remove();" style="background:rgba(255,68,102,.1);border:1px solid var(--red);border-radius:8px;padding:7px;color:var(--red);cursor:pointer;font-size:.82rem;text-align:left;">
+      📵 Colgar
+    </button>
+  `;
+  document.body.appendChild(p);
+  // Cerrar al tocar fuera
+  setTimeout(() => document.addEventListener('click', function close(e) {
+    if (!e.target.closest('#bubble-panel') && !e.target.closest('#voice-bubble')) { p.remove(); document.removeEventListener('click', close); }
+  }), 100);
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1892,14 +2198,14 @@ function openCanvas(channelId) {
   currentChannelCanvas = channelId || chIdStr();
   canvasOpen = true;
   const wrap = $('canvas-wrap');
-  if(wrap) wrap.classList.add('open');
-  // Request full state
-  socket.emit('canvas-state-request', {channelId: currentChannelCanvas});
+  if(wrap) { wrap.style.display = 'flex'; }
+  // Replay existing strokes
+  socket.emit('canvas-state-req', {channelId: currentChannelCanvas});
 }
 function closeCanvas() {
   canvasOpen = false;
   const wrap = $('canvas-wrap');
-  if(wrap) wrap.classList.remove('open');
+  if(wrap) wrap.style.display = 'none';
 }
 function clearCanvas() {
   if(!currentChannelCanvas) return;
@@ -2129,11 +2435,331 @@ document.addEventListener('DOMContentLoaded', () => {
   const cmdHint = document.querySelector('.cmd-hint');
   if(cmdHint) cmdHint.textContent = '/play /watch /partydo /roll /poll /alarm /focus /translate /draw /snapshot /help';
 });
+
+// ═══════════════════════════════════════════════════════
+// MINIJUEGOS v4.4
+// ═══════════════════════════════════════════════════════
+
+function openGamesMenu(){
+  if(!_chId()){showNotif('Únete a un canal primero.');return;}
+  openModal('games-modal');
+}
+function closeGameOverlay(id){
+  const el=$(id);if(el)el.classList.remove('on');
+  // Stop any running game loops
+  if(id==='game-snake'){clearInterval(snakeLoop);snakeLoop=null;}
+  if(id==='game-typerace'){clearInterval(traceInterval);traceInterval=null;}
+}
+
+// ── 🐍 SNAKE ──────────────────────────────────────────
+let snakeLoop=null;
+const SN={running:false,W:20,H:20,cell:16,snake:[],dir:{x:1,y:0},next:{x:1,y:0},food:{x:5,y:5},score:0,lives:3};
+
+function initSnake(){
+  $('game-snake').classList.add('on');
+  startSnake();
+}
+function startSnake(){
+  clearInterval(snakeLoop);snakeLoop=null;
+  const mid=10;
+  SN.snake=[{x:mid,y:mid},{x:mid-1,y:mid},{x:mid-2,y:mid}];
+  SN.dir={x:1,y:0};SN.next={x:1,y:0};SN.score=0;SN.lives=3;SN.running=true;
+  snakeFood();
+  updateSnakeHUD();
+  snakeLoop=setInterval(snakeTick,120);
+  socket.emit('send-message',{channelId:chIdStr(),content:`🐍 **${myUser?.username||'?'}** inició Snake. ¡A jugar!`,attachments:[]});
+}
+function snakeFood(){SN.food={x:Math.floor(Math.random()*SN.W),y:Math.floor(Math.random()*SN.H)};}
+function snakeDir(dx,dy){if(dx&&!SN.dir.x)SN.next={x:dx,y:0};if(dy&&!SN.dir.y)SN.next={x:0,y:dy};}
+function updateSnakeHUD(){$('snake-score').textContent=`Score: ${SN.score}`;$('snake-lives').textContent=`Vidas: ${'❤️'.repeat(SN.lives)}`;}
+function snakeTick(){
+  if(!SN.running)return;
+  SN.dir=SN.next;
+  const h={x:SN.snake[0].x+SN.dir.x,y:SN.snake[0].y+SN.dir.y};
+  const hit=h.x<0||h.x>=SN.W||h.y<0||h.y>=SN.H||SN.snake.some(s=>s.x===h.x&&s.y===h.y);
+  if(hit){
+    SN.lives--;updateSnakeHUD();
+    if(SN.lives<=0){
+      SN.running=false;clearInterval(snakeLoop);snakeLoop=null;
+      socket.emit('send-message',{channelId:chIdStr(),content:`💀 **Game Over!** Score final: **${SN.score}**`,attachments:[]});
+      showNotif(`💀 Game Over! Score: ${SN.score}`);
+      snakeDraw();return;
+    }
+    // Reset snake position keeping score
+    const mid=10;
+    SN.snake=[{x:mid,y:mid},{x:mid-1,y:mid},{x:mid-2,y:mid}];
+    SN.dir={x:1,y:0};SN.next={x:1,y:0};
+    return;
+  }
+  SN.snake.unshift(h);
+  if(h.x===SN.food.x&&h.y===SN.food.y){
+    SN.score+=10;snakeFood();updateSnakeHUD();
+    if(SN.score%50===0){socket.emit('send-message',{channelId:chIdStr(),content:`🔥 Score: **${SN.score}** — ¡Sigue así!`,attachments:[]});}
+  }else SN.snake.pop();
+  snakeDraw();
+}
+function snakeDraw(){
+  const cv=$('snake-canvas');if(!cv)return;
+  const ctx=cv.getContext('2d');
+  const cw=cv.width/SN.W,ch=cv.height/SN.H;
+  ctx.fillStyle='#0a0a10';ctx.fillRect(0,0,cv.width,cv.height);
+  // Grid dots
+  ctx.fillStyle='rgba(255,255,255,.04)';
+  for(let x=0;x<SN.W;x++)for(let y=0;y<SN.H;y++)ctx.fillRect(x*cw+cw/2-1,y*ch+ch/2-1,2,2);
+  // Food
+  ctx.fillStyle='#ff4466';ctx.shadowColor='#ff4466';ctx.shadowBlur=8;
+  ctx.beginPath();ctx.arc(SN.food.x*cw+cw/2,SN.food.y*ch+ch/2,cw/2-2,0,Math.PI*2);ctx.fill();
+  ctx.shadowBlur=0;
+  // Snake
+  SN.snake.forEach((s,i)=>{
+    const p=i/SN.snake.length;
+    ctx.fillStyle=i===0?'#39ffc0':`hsl(${150+p*60},${80-p*20}%,${50-p*15}%)`;
+    const pad=i===0?0:1;
+    if(i===0){
+      ctx.shadowColor='#39ffc0';ctx.shadowBlur=6;
+      ctx.fillRect(s.x*cw+pad,s.y*ch+pad,cw-pad*2,ch-pad*2);
+      ctx.shadowBlur=0;
+    }else{ctx.fillRect(s.x*cw+pad,s.y*ch+pad,cw-pad*2,ch-pad*2);}
+  });
+}
+document.addEventListener('keydown',e=>{
+  if(!$('game-snake')?.classList.contains('on'))return;
+  const d={ArrowUp:{x:0,y:-1},ArrowDown:{x:0,y:1},ArrowLeft:{x:-1,y:0},ArrowRight:{x:1,y:0},w:{x:0,y:-1},s:{x:0,y:1},a:{x:-1,y:0},d:{x:1,y:0}};
+  const dir=d[e.key];if(dir){e.preventDefault();snakeDir(dir.x,dir.y);}
+});
+
+// ── 🧠 TRIVIA ─────────────────────────────────────────
+const TRIVIA=[
+  {cat:'💻 Tech',q:'¿Cuántos bytes en un kilobyte?',opts:['512','1024','2048','256'],a:1},
+  {cat:'💻 Tech',q:'¿Qué significa CPU?',opts:['Central Processing Unit','Computer Power Unit','Core Processing Unit','Central Power Unit'],a:0},
+  {cat:'🌍 General',q:'¿Capital de Australia?',opts:['Sydney','Melbourne','Brisbane','Canberra'],a:3},
+  {cat:'🎬 Cine',q:'¿Director de Inception?',opts:['Spielberg','Nolan','Tarantino','Fincher'],a:1},
+  {cat:'🔢 Mates',q:'¿Raíz cuadrada de 144?',opts:['11','12','13','14'],a:1},
+  {cat:'💻 Tech',q:'¿HTML significa?',opts:['HyperText Markup Language','High Transfer Markup Language','HyperText Modular Language','High Text Markup Language'],a:0},
+  {cat:'🌍 General',q:'¿País más grande del mundo?',opts:['China','Canadá','EE.UU.','Rusia'],a:3},
+  {cat:'🔢 Mates',q:'¿Cuántos lados tiene un hexágono?',opts:['5','6','7','8'],a:1},
+  {cat:'🎵 Música',q:'¿Cuántas cuerdas tiene una guitarra estándar?',opts:['4','5','6','7'],a:2},
+  {cat:'🌍 General',q:'¿En qué año llegó el hombre a la Luna?',opts:['1965','1967','1969','1971'],a:2},
+  {cat:'💻 Tech',q:'¿Qué lenguaje usa Node.js?',opts:['Python','Java','JavaScript','Ruby'],a:2},
+  {cat:'🎬 Cine',q:'¿Cuántas partes tiene el Señor de los Anillos (cine)?',opts:['2','3','4','5'],a:1},
+  {cat:'🔢 Mates',q:'¿Valor de Pi redondeado a 2 decimales?',opts:['3.12','3.14','3.16','3.18'],a:1},
+  {cat:'🌍 General',q:'¿Cuántos países hay en África?',opts:['45','54','63','72'],a:1},
+  {cat:'💻 Tech',q:'¿Qué significa CSS?',opts:['Cascading Style Sheets','Computer Style System','Creative Style Sheets','Core Style System'],a:0},
+];
+let triviaIdx=0,triviaScores={},triviaAnswered=false;
+function initTrivia(){
+  triviaIdx=Math.floor(Math.random()*TRIVIA.length);
+  triviaScores={};triviaAnswered=false;
+  $('game-trivia').classList.add('on');
+  loadTriviaQ();
+  socket.emit('send-message',{channelId:chIdStr(),content:`🧠 **${myUser?.username||'?'}** inició Trivia. ¡El que más acierte gana!`,attachments:[]});
+}
+function loadTriviaQ(){
+  triviaAnswered=false;
+  const q=TRIVIA[triviaIdx%TRIVIA.length];
+  $('trivia-cat').textContent=q.cat;
+  $('trivia-q').textContent=q.q;
+  $('trivia-status').textContent='';
+  $('trivia-opts').innerHTML=q.opts.map((o,i)=>`<button class="trivia-opt" onclick="answerTrivia(${i})">${o}</button>`).join('');
+  updateTriviaScores();
+}
+function answerTrivia(idx){
+  if(triviaAnswered)return;
+  triviaAnswered=true;
+  const q=TRIVIA[triviaIdx%TRIVIA.length];
+  const opts=$('trivia-opts').querySelectorAll('.trivia-opt');
+  const correct=idx===q.a;
+  opts[idx].classList.add(correct?'correct':'wrong');
+  opts[q.a].classList.add('revealed');
+  if(correct){
+    const name=myUser?.username||'?';
+    triviaScores[name]=(triviaScores[name]||0)+1;
+    $('trivia-status').textContent=`✅ ¡Correcto! +1 punto para ${name}`;
+    beep(880,.1,.15);beep(1100,.15,.15);
+    socket.emit('send-message',{channelId:chIdStr(),content:`🧠 **${name}** respondió **correctamente**: ${q.opts[q.a]}`,attachments:[]});
+  }else{
+    $('trivia-status').textContent=`❌ Incorrecto. Era: ${q.opts[q.a]}`;
+    beep(300,.2,.12,'sawtooth');
+  }
+  updateTriviaScores();
+}
+function nextTriviaQ(){
+  triviaIdx=(triviaIdx+1)%TRIVIA.length;
+  loadTriviaQ();
+}
+function updateTriviaScores(){
+  const entries=Object.entries(triviaScores).sort((a,b)=>b[1]-a[1]);
+  $('trivia-scores').innerHTML=entries.length?entries.map(([n,s])=>`<span>🏆 ${esc(n)}: ${s}</span>`).join(''):`<span style="color:var(--muted);">Sin puntos aún</span>`;
+}
+
+// ── 📝 WORDLE ─────────────────────────────────────────
+const WORDS=['CANAL','JUEGO','MUNDO','CIELO','FUEGO','PLAYA','MONTE','VERDE','NEGRO','BLANCO','DISCO','CLIMA','RADIO','MUSICA','LIBRO','CARTA','PLAZA','CAMPO','TORRE','PLATO','FONDO','BRISA','NOCHE','TARDE','ARENA','NIEVE','LLAMA','RUMBA','SALSA','RITMO'].filter(w=>w.length===5);
+let wdState={word:'',guesses:[],current:'',row:0,done:false};
+function initWordle(){
+  $('game-wordle').classList.add('on');
+  newWordleGame();
+}
+function newWordleGame(){
+  wdState.word=WORDS[Math.floor(Math.random()*WORDS.length)];
+  wdState.guesses=[];wdState.current='';wdState.row=0;wdState.done=false;
+  buildWordleGrid();buildWordleKb();
+  $('wordle-status').innerHTML=`<span style="color:var(--muted);">Adivina la palabra de 5 letras (6 intentos)</span>`;
+  socket.emit('send-message',{channelId:chIdStr(),content:`📝 **${myUser?.username||'?'}** inició Wordle. ¡Adivinen la palabra de 5 letras!`,attachments:[]});
+}
+function buildWordleGrid(){
+  const grid=$('wordle-grid');if(!grid)return;
+  grid.innerHTML='';
+  for(let r=0;r<6;r++){
+    const row=document.createElement('div');row.className='wordle-row';row.id=`wr-${r}`;
+    for(let c=0;c<5;c++){const cell=document.createElement('div');cell.className='wordle-cell';cell.id=`wc-${r}-${c}`;row.appendChild(cell);}
+    grid.appendChild(row);
+  }
+}
+function buildWordleKb(){
+  const kb=$('wordle-kb');if(!kb)return;
+  const rows=['QWERTYUIOP','ASDFGHJKL','ZXCVBNM'];
+  kb.innerHTML=rows.map(r=>`<div class="wordle-kb-row">${[...r].map(k=>`<button class="wordle-key" id="wk-${k}" onclick="wordleKey('${k}')">${k}</button>`).join('')}</div>`).join('');
+  kb.innerHTML+=`<div class="wordle-kb-row"><button class="wordle-key" onclick="wordleSubmit()" style="min-width:52px;">↵</button><button class="wordle-key" onclick="wordleBackspace()" style="min-width:40px;">⌫</button></div>`;
+}
+function wordleKey(k){
+  if(wdState.done||wdState.current.length>=5)return;
+  wdState.current+=k;
+  updateWordleRow();
+}
+function wordleBackspace(){if(wdState.done)return;wdState.current=wdState.current.slice(0,-1);updateWordleRow();}
+function updateWordleRow(){
+  const r=wdState.row;
+  for(let c=0;c<5;c++){
+    const cell=$(`wc-${r}-${c}`);if(!cell)return;
+    cell.textContent=wdState.current[c]||'';
+    cell.className='wordle-cell'+(c===wdState.current.length-1?' active':'');
+  }
+}
+function wordleSubmit(){
+  if(wdState.done||wdState.current.length<5)return;
+  const guess=wdState.current;
+  const word=wdState.word;
+  const result=[];
+  const used=Array(5).fill(false);
+  // Correct
+  for(let i=0;i<5;i++){if(guess[i]===word[i]){result[i]='correct';used[i]=true;}}
+  // Present / Absent
+  for(let i=0;i<5;i++){
+    if(result[i])continue;
+    const idx=word.split('').findIndex((c,j)=>c===guess[i]&&!used[j]);
+    if(idx>=0){result[i]='present';used[idx]=true;}else result[i]='absent';
+  }
+  // Update grid
+  const r=wdState.row;
+  for(let c=0;c<5;c++){
+    const cell=$(`wc-${r}-${c}`);if(!cell)continue;
+    cell.textContent=guess[c];
+    setTimeout(()=>cell.className=`wordle-cell ${result[c]}`,c*80);
+    // Update keyboard
+    setTimeout(()=>{
+      const key=$(`wk-${guess[c]}`);
+      if(!key)return;
+      const cur=key.className;
+      if(!cur.includes('correct')&&(result[c]==='correct'||(result[c]==='present'&&!cur.includes('present'))||(result[c]==='absent'&&!cur.includes('present')&&!cur.includes('correct'))))
+        key.className=`wordle-key ${result[c]}`;
+    },c*80+200);
+  }
+  wdState.guesses.push({guess,result});wdState.current='';wdState.row++;
+  const won=result.every(r=>r==='correct');
+  setTimeout(()=>{
+    if(won){
+      wdState.done=true;
+      $('wordle-status').innerHTML=`<span style="color:var(--green);">🎉 ¡Correcto! Era <strong>${word}</strong> · ${wdState.row}/6</span>`;
+      socket.emit('send-message',{channelId:chIdStr(),content:`📝 ¡**${myUser?.username}** adivinó el Wordle en ${wdState.row}/6! La palabra era **${word}** 🎉`,attachments:[]});
+      beep(880,.1,.2);beep(1100,.1,.2);setTimeout(()=>beep(1320,.2,.2),150);
+    }else if(wdState.row>=6){
+      wdState.done=true;
+      $('wordle-status').innerHTML=`<span style="color:var(--red);">❌ Era <strong>${word}</strong>. ¡Intenta de nuevo!</span>`;
+      socket.emit('send-message',{channelId:chIdStr(),content:`📝 Wordle fallido. La palabra era **${word}** 😢`,attachments:[]});
+    }else{
+      $('wordle-status').innerHTML=`<span style="color:var(--muted);">Intento ${wdState.row}/6</span>`;
+    }
+  },400);
+}
+document.addEventListener('keydown',e=>{
+  if(!$('game-wordle')?.classList.contains('on'))return;
+  if(e.key==='Enter')wordleSubmit();
+  else if(e.key==='Backspace')wordleBackspace();
+  else if(/^[a-zA-ZñÑ]$/.test(e.key))wordleKey(e.key.toUpperCase());
+});
+
+// ── ⌨️ TYPE RACE ──────────────────────────────────────
+const RACE_TEXTS=[
+  'El tiempo vuela cuando uno se divierte con sus amigos.',
+  'La tecnología avanza más rápido de lo que podemos imaginar.',
+  'Aprender a programar es una de las mejores inversiones.',
+  'El código limpio es un regalo para los futuros desarrolladores.',
+  'La práctica constante es la clave del dominio de cualquier habilidad.',
+  'No existe el código perfecto, solo el código que funciona bien.',
+  'Cada bug resuelto es una victoria personal del programador.',
+  'Los mejores proyectos nacen de la colaboración entre personas.',
+];
+let traceInterval=null,traceStart=0,traceIdx=0,traceDone=false;
+let traceScores={};
+function initTypeRace(){
+  $('game-typerace').classList.add('on');
+  startTypeRace();
+}
+function startTypeRace(){
+  clearInterval(traceInterval);traceInterval=null;
+  traceDone=false;traceScores={};
+  const text=RACE_TEXTS[Math.floor(Math.random()*RACE_TEXTS.length)];
+  const el=$('typerace-text');
+  el.innerHTML=[...text].map((c,i)=>`<span class="typerace-char" data-idx="${i}">${c==' '?'&nbsp;':esc(c)}</span>`).join('');
+  const inp=$('typerace-input');inp.value='';inp.focus();
+  traceIdx=0;traceStart=0;
+  $('typerace-wpm').textContent='';
+  updateTraceScores();
+  socket.emit('send-message',{channelId:chIdStr(),content:`⌨️ **${myUser?.username||'?'}** inició Type Race. ¡A escribir!`,attachments:[]});
+  inp.oninput=e=>{
+    const val=inp.value;
+    const chars=$('typerace-text').querySelectorAll('.typerace-char');
+    const text=[...chars].map(c=>c.textContent).join('').replace(/ /g,' ');
+    if(traceStart===0&&val.length>0)traceStart=Date.now();
+    [...chars].forEach((c,i)=>{
+      if(i<val.length)c.className='typerace-char '+(val[i]===text[i]?'correct':'wrong');
+      else c.className='typerace-char'+(i===val.length?' cursor':'');
+    });
+    if(val.length===text.length){
+      traceDone=true;
+      const elapsed=(Date.now()-traceStart)/60000;
+      const words=text.split(' ').length;
+      const wpm=Math.round(words/elapsed);
+      const name=myUser?.username||'?';
+      traceScores[name]={wpm,time:((Date.now()-traceStart)/1000).toFixed(1)};
+      $('typerace-wpm').textContent=`✅ Completado — ${wpm} WPM`;
+      updateTraceScores();
+      beep(880,.1,.2);beep(1100,.15,.2);
+      socket.emit('send-message',{channelId:chIdStr(),content:`⌨️ **${name}** terminó en **${wpm} WPM** (${traceScores[name].time}s) 🏁`,attachments:[]});
+    }else if(traceStart>0&&!traceDone){
+      const elapsed=(Date.now()-traceStart)/60000||.001;
+      const approxWords=val.split(' ').length;
+      $('typerace-wpm').textContent=`${Math.round(approxWords/elapsed)} WPM en vivo`;
+    }
+  };
+}
+function updateTraceScores(){
+  const entries=Object.entries(traceScores).sort((a,b)=>b[1].wpm-a[1].wpm);
+  $('typerace-scores').innerHTML=entries.length
+    ?entries.map(([n,d])=>`<span>⌨️ ${esc(n)}: ${d.wpm} WPM</span>`).join('')
+    :`<span style="color:var(--muted);">Esperando jugadores...</span>`;
+}
+
+// ── Games socket events ────────────────────────────────
+// Cuando alguien manda un mensaje con resultado de juego, ya queda en el chat
+// No necesitamos eventos extra — el chat es el canal de resultados
+
+
 </script>
 <script src="https://www.youtube.com/iframe_api"></script>
 
 <!-- ═══ CANVAS / PIZARRA ══════════════════════════════════ -->
-<div id="canvas-wrap" style="position:fixed;inset:0;background:rgba(0,0,0,.92);display:none;flex-direction:column;align-items:center;justify-content:center;z-index:300;gap:10px;padding:12px;">
+<div id="canvas-wrap" style="position:fixed;inset:0;background:rgba(0,0,0,.92);display:none;flex-direction:column;align-items:center;justify-content:center;z-index:1000;gap:10px;padding:12px;">
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:8px 12px;">
     <span style="font-size:.78rem;color:var(--muted);">Color:</span>
     <input type="color" value="#a8d8ff" oninput="brushColor=this.value" style="width:28px;height:28px;border:none;border-radius:4px;cursor:pointer;background:none;"/>
@@ -2164,5 +2790,89 @@ document.addEventListener('DOMContentLoaded', () => {
   <div id="ctx-delete" onclick="ctxAction('delete')" style="padding:9px 14px;cursor:pointer;font-size:.82rem;color:var(--red);transition:background .15s;display:none;" onmouseover="this.style.background='rgba(255,68,102,.1)'" onmouseout="this.style.background=''">🗑 Eliminar</div>
 </div>
 
+<!-- ═══ GAMES MENU ═════════════════════════════════════ -->
+<div class="overlay" id="games-modal" onclick="if(event.target===this)closeModal('games-modal')">
+  <div class="modal">
+    <div class="modal-title" style="color:var(--green);">🎮 MINIJUEGOS</div>
+    <div style="font-size:.75rem;color:var(--muted);margin-top:-4px;">Juega con todos en el canal en tiempo real.</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px;">
+      <button class="game-btn" onclick="closeModal('games-modal');initSnake();" style="display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:12px;">
+        <span style="font-size:1.3rem;">🐍</span><span style="font-weight:700;">Snake</span><span style="font-size:.65rem;color:var(--muted);">Cooperativo</span>
+      </button>
+      <button class="game-btn" onclick="closeModal('games-modal');initTrivia();" style="display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:12px;">
+        <span style="font-size:1.3rem;">🧠</span><span style="font-weight:700;">Trivia</span><span style="font-size:.65rem;color:var(--muted);">vs. todos</span>
+      </button>
+      <button class="game-btn" onclick="closeModal('games-modal');initWordle();" style="display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:12px;">
+        <span style="font-size:1.3rem;">📝</span><span style="font-weight:700;">Wordle</span><span style="font-size:.65rem;color:var(--muted);">Cooperativo</span>
+      </button>
+      <button class="game-btn" onclick="closeModal('games-modal');initTypeRace();" style="display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:12px;">
+        <span style="font-size:1.3rem;">⌨️</span><span style="font-weight:700;">Type Race</span><span style="font-size:.65rem;color:var(--muted);">vs. todos</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- SNAKE -->
+<div class="game-overlay" id="game-snake">
+  <div class="game-title">🐍 SNAKE COOPERATIVO</div>
+  <div class="game-score-bar"><span id="snake-score">Score: 0</span><span id="snake-lives">Vidas: 3</span></div>
+  <canvas id="snake-canvas" width="320" height="320"></canvas>
+  <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:center;">
+    <div style="display:grid;grid-template-columns:repeat(3,40px);grid-template-rows:repeat(3,40px);gap:3px;">
+      <div></div><button class="game-btn" style="padding:0;width:40px;height:40px;" onclick="snakeDir(0,-1)">▲</button><div></div>
+      <button class="game-btn" style="padding:0;width:40px;height:40px;" onclick="snakeDir(-1,0)">◄</button><div></div><button class="game-btn" style="padding:0;width:40px;height:40px;" onclick="snakeDir(1,0)">►</button>
+      <div></div><button class="game-btn" style="padding:0;width:40px;height:40px;" onclick="snakeDir(0,1)">▼</button><div></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:7px;">
+      <button class="game-btn prim" onclick="startSnake()">▶ Nueva partida</button>
+      <button class="game-btn" onclick="closeGameOverlay('game-snake')">✕ Salir</button>
+    </div>
+  </div>
+  <div style="font-size:.65rem;color:var(--muted);font-family:'Space Mono',monospace;">WASD o flechas para mover · Come la 🔴 para crecer</div>
+</div>
+
+<!-- TRIVIA -->
+<div class="game-overlay" id="game-trivia">
+  <div class="game-title">🧠 TRIVIA ONLINE</div>
+  <div class="game-score-bar" id="trivia-scores"></div>
+  <div class="game-box" style="max-width:500px;">
+    <div id="trivia-cat" style="font-size:.65rem;color:var(--muted);font-family:'Space Mono',monospace;letter-spacing:1px;"></div>
+    <div class="trivia-q" id="trivia-q">Cargando pregunta...</div>
+    <div class="trivia-opts" id="trivia-opts"></div>
+    <div style="font-size:.72rem;color:var(--muted);font-family:'Space Mono',monospace;min-height:18px;" id="trivia-status"></div>
+  </div>
+  <div style="display:flex;gap:8px;">
+    <button class="game-btn prim" onclick="nextTriviaQ()">▶ Siguiente</button>
+    <button class="game-btn" onclick="closeGameOverlay('game-trivia')">✕ Salir</button>
+  </div>
+</div>
+
+<!-- WORDLE -->
+<div class="game-overlay" id="game-wordle">
+  <div class="game-title">📝 WORDLE COOPERATIVO</div>
+  <div class="game-score-bar" id="wordle-status"></div>
+  <div class="wordle-grid" id="wordle-grid"></div>
+  <div class="wordle-kb" id="wordle-kb"></div>
+  <div style="display:flex;gap:8px;margin-top:4px;">
+    <button class="game-btn prim" onclick="newWordleGame()">🔄 Nueva palabra</button>
+    <button class="game-btn" onclick="closeGameOverlay('game-wordle')">✕ Salir</button>
+  </div>
+  <div style="font-size:.65rem;color:var(--muted);font-family:'Space Mono',monospace;">🟩 Correcta · 🟨 Presente · ⬛ Ausente</div>
+</div>
+
+<!-- TYPE RACE -->
+<div class="game-overlay" id="game-typerace">
+  <div class="game-title">⌨️ TYPE RACE</div>
+  <div class="game-score-bar" id="typerace-scores"></div>
+  <div class="game-box" style="max-width:520px;width:100%;">
+    <div class="typerace-text" id="typerace-text"></div>
+    <input id="typerace-input" style="background:var(--bg3);border:1px solid var(--line);border-radius:7px;padding:9px 12px;font-family:'Space Mono',monospace;font-size:.88rem;color:var(--text);outline:none;width:100%;margin-top:4px;" placeholder="Empieza a escribir..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+    <div style="font-size:.72rem;color:var(--muted);font-family:'Space Mono',monospace;min-height:18px;" id="typerace-wpm"></div>
+  </div>
+  <div style="display:flex;gap:8px;">
+    <button class="game-btn prim" onclick="startTypeRace()">▶ Nueva carrera</button>
+    <button class="game-btn" onclick="closeGameOverlay('game-typerace')">✕ Salir</button>
+  </div>
+</div>
 </body>
 </html>

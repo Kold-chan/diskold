@@ -755,6 +755,9 @@ io.on('connection', socket => {
     socket.to('ch:'+channelId).emit('canvas-stroke', { stroke: { ...stroke, user:me.username }, channelId });
     bumpVibe(channelId);
   });
+  socket.on('canvas-state-req', ({channelId}) => {
+    socket.emit('canvas-state', { channelId, strokes: getCanvas(channelId).strokes });
+  });
   socket.on('canvas-clear', ({channelId}) => {
     const me = connected[socket.id]; if (!me) return;
     getCanvas(channelId).strokes = [];
@@ -798,7 +801,12 @@ io.on('connection', socket => {
     io.to('ch:'+channelId).emit('watch-state', { ...wp, channelId });
   });
 
-    // ── DISCONNECT ─────────────────────────────────────────
+    // ── VOICE PING (keepalive) ────────────────────────────
+  socket.on('voice-ping', ({channelId}) => {
+    // Just a keepalive — socket is alive, no-op
+  });
+
+  // ── DISCONNECT ─────────────────────────────────────────
   socket.on('disconnect', async () => {
     const me = connected[socket.id];
     leaveVoice(socket);
