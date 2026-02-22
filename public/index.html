@@ -2755,6 +2755,60 @@ function updateTraceScores(){
 // No necesitamos eventos extra — el chat es el canal de resultados
 
 
+
+// ═══════════════════════════════════════════════════════
+// ANDROID NATIVE BRIDGE — burbuja flotante nativa
+// Solo activo cuando corre dentro del APK de Diskold
+// ═══════════════════════════════════════════════════════
+const IS_NATIVE = typeof AndroidBridge !== 'undefined';
+
+// Parchear joinVoiceCh para avisar al bridge nativo
+const _origJoinVoiceCh = joinVoiceCh;
+async function joinVoiceCh(chId) {
+  await _origJoinVoiceCh(chId);
+  // Avisar al bridge nativo cuando se une exitosamente
+  if (IS_NATIVE && inVoice) {
+    const ch = currentServer?.channels.find(c => String(c._id) === String(chId));
+    const name = ch?.name || 'Voz';
+    try { AndroidBridge.startVoiceBubble(name, micMuted); } catch(e) {}
+  }
+}
+
+// Parchear leaveVoice para detener la burbuja nativa
+const _origLeaveVoice = leaveVoice;
+function leaveVoice() {
+  _origLeaveVoice();
+  if (IS_NATIVE) {
+    try { AndroidBridge.stopVoiceBubble(); } catch(e) {}
+  }
+}
+
+// Parchear toggleMic para actualizar el ícono de la burbuja nativa
+const _origToggleMic = toggleMic;
+function toggleMic() {
+  _origToggleMic();
+  if (IS_NATIVE) {
+    try { AndroidBridge.updateMicState(micMuted); } catch(e) {}
+  }
+}
+
+// Pedir permiso overlay si no lo tiene
+if (IS_NATIVE && !AndroidBridge.hasOverlayPermission()) {
+  setTimeout(() => {
+    if (confirm('Para mostrar la burbuja de llamada sobre otras apps, Diskold necesita un permiso especial. ¿Conceder?')) {
+      AndroidBridge.requestOverlayPermission();
+    }
+  }, 3000);
+}
+
+// Función llamada desde MainActivity.onResume()
+function onAppResume() {
+  if (inVoice && localStream) {
+    localStream.getAudioTracks().forEach(t => { if (!t.enabled && !micMuted) t.enabled = true; });
+    document.querySelectorAll('[id^="raud-"]').forEach(a => a.play().catch(() => {}));
+  }
+}
+
 </script>
 <script src="https://www.youtube.com/iframe_api"></script>
 
