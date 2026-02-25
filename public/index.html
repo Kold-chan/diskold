@@ -366,20 +366,16 @@ html,body{height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(
   background: rgba(255,255,255,.012);
   border-left: 1px solid rgba(255,255,255,.04);
   border-right: 1px solid rgba(255,255,255,.04);
+  min-height: 0;
 }
 .mania-lane.active-flash { background: rgba(168,216,255,.06); }
 
 /* ── Notes ── */
 .mania-note {
-  position: absolute; left: 2px; right: 2px;
+  position: absolute; left: 3px; right: 3px;
   border-radius: 5px 5px 3px 3px;
-  box-shadow: 0 0 8px currentColor;
-  transition: none;
+  transition: none; pointer-events: none;
 }
-.mania-note.k0 { background: linear-gradient(180deg,#a8d8ff,#5ba8cc); color: #a8d8ff; border: 1px solid #a8d8ff; }
-.mania-note.k1 { background: linear-gradient(180deg,#c084fc,#8040c0); color: #c084fc; border: 1px solid #c084fc; }
-.mania-note.k2 { background: linear-gradient(180deg,#c084fc,#8040c0); color: #c084fc; border: 1px solid #c084fc; }
-.mania-note.k3 { background: linear-gradient(180deg,#a8d8ff,#5ba8cc); color: #a8d8ff; border: 1px solid #a8d8ff; }
 
 /* ── Hit Zone ── */
 .mania-hitzone {
@@ -3073,34 +3069,20 @@ function updateTraceScores(){
 // ═══════════════════════════════════════════════════════
 const IS_NATIVE = typeof AndroidBridge !== 'undefined';
 
-// Parchear joinVoiceCh para avisar al bridge nativo
-const _origJoinVoiceCh = joinVoiceCh;
-async function joinVoiceCh(chId) {
-  await _origJoinVoiceCh(chId);
-  // Avisar al bridge nativo cuando se une exitosamente
-  if (IS_NATIVE && inVoice) {
-    const ch = currentServer?.channels.find(c => String(c._id) === String(chId));
-    const name = ch?.name || 'Voz';
-    try { AndroidBridge.startVoiceBubble(name, micMuted); } catch(e) {}
-  }
-}
-
-// Parchear leaveVoice para detener la burbuja nativa
-const _origLeaveVoice = leaveVoice;
-function leaveVoice() {
-  _origLeaveVoice();
-  if (IS_NATIVE) {
-    try { AndroidBridge.stopVoiceBubble(); } catch(e) {}
-  }
-}
-
-// Parchear toggleMic para actualizar el ícono de la burbuja nativa
-const _origToggleMic = toggleMic;
-function toggleMic() {
-  _origToggleMic();
-  if (IS_NATIVE) {
-    try { AndroidBridge.updateMicState(micMuted); } catch(e) {}
-  }
+// Bridge nativo Android — usamos arrow functions para evitar hoisting
+if (IS_NATIVE) {
+  const _jvc = joinVoiceCh;
+  joinVoiceCh = async (chId) => {
+    await _jvc(chId);
+    if (inVoice) {
+      const ch = currentServer?.channels.find(c => String(c._id) === String(chId));
+      try { AndroidBridge.startVoiceBubble(ch?.name || 'Voz', micMuted); } catch(e) {}
+    }
+  };
+  const _lv = leaveVoice;
+  leaveVoice = () => { _lv(); try { AndroidBridge.stopVoiceBubble(); } catch(e) {} };
+  const _tm = toggleMic;
+  toggleMic = () => { _tm(); try { AndroidBridge.updateMicState(micMuted); } catch(e) {} };
 }
 
 // Pedir permiso overlay si no lo tiene
@@ -3270,16 +3252,16 @@ function resetManiaState() {
 function maniaLoop(ts) {
   if (!MANIA.running) return;
 
-  const dt = Math.min(ts - maniaLastTime, 50); // cap dt at 50ms to avoid spiral
+  const dt = Math.min(ts - maniaLastTime, 50);
   maniaLastTime = ts;
   MANIA.gameTime = ts - MANIA.startTime;
 
-  // Speed progression — increases every few seconds
-  maniaSpeedTimer += dt;
+  // Speed progression
   const cfg = MANIA_DIFFS[maniaDiff];
-  const targetMult = 1.0 + (MANIA.gameTime / 1000) * cfg.accel;
-  maniaSpeedMult = Math.min(targetMult, maniaDiff === 'hard' ? 4.5 : maniaDiff === 'normal' ? 3.5 : 2.5);
-  const speedPx = cfg.baseSpeed * maniaSpeedMult / 1000; // px per ms
+  const maxMult = maniaDiff === 'hard' ? 4.5 : maniaDiff === 'normal' ? 3.5 : 2.5;
+  maniaSpeedMult = Math.min(1.0 + (MANIA.gameTime / 1000) * cfg.accel, maxMult);
+  // px per ms — notes fall this many px every millisecond
+  const speedPx = cfg.baseSpeed * maniaSpeedMult / 1000;
 
   const label = $('mania-speed-label');
   if (label) label.textContent = maniaSpeedMult.toFixed(1) + 'x';
@@ -3292,35 +3274,31 @@ function maniaLoop(ts) {
     spawnManiaNote();
   }
 
-  // Measure field
+  // Get field height for positioning
   const field = $('mania-field');
   if (!field) { MANIA.raf = requestAnimationFrame(maniaLoop); return; }
   const fieldH = field.clientHeight;
-  const hitZoneH = 54; // matches CSS
-  const hitCenterY = fieldH + hitZoneH / 2; // center of hitzone relative to field top
-  const hitY = fieldH; // y where note should be hit (bottom of field)
+  const NOTE_H = 26;
+  // hitY = top position where note center should be to be "at the hit zone"
+  // The hit zone is BELOW the field, so notes are at hitY when they reach fieldH - NOTE_H
+  const hitY = fieldH - NOTE_H;
 
-  // Update notes
   const now = ts;
   const toRemove = [];
 
   for (const note of MANIA.notes) {
     if (note.hit || note.missed) continue;
 
-    // Y position: how far note has fallen
+    // elapsed since spawn → convert to px fallen from top
     const elapsed = now - note.spawnTime;
-    const travelTotal = fieldH + 40; // total distance (field height + note height)
-    note.y = elapsed * speedPx;
+    // Start from -NOTE_H (just above field), fall to hitY
+    note.y = -NOTE_H + elapsed * speedPx;
 
-    if (note.el) {
-      // Position from bottom of field (hit zone)
-      const fromBottom = hitY - note.y;
-      note.el.style.bottom = fromBottom + 'px';
-    }
+    if (note.el) note.el.style.top = note.y + 'px';
 
-    // Auto-miss: note has passed the hit zone by more than miss window
-    const distPastHit = note.y - hitY;
-    if (distPastHit > cfg.baseSpeed * MANIA_DIFFS[maniaDiff].windows.miss / 1000 * maniaSpeedMult + 30) {
+    // Miss: note fell past hit zone and is no longer hittable
+    // hitY + NOTE_H = note fully past the hit zone
+    if (note.y > hitY + 80) {
       registerMiss(note);
       toRemove.push(note);
     }
@@ -3331,65 +3309,64 @@ function maniaLoop(ts) {
   // Progress bar
   const prog = $('mania-progress');
   if (prog) {
-    const elapsed = MANIA.gameTime / 1000;
+    const elSec = MANIA.gameTime / 1000;
     const maxTime = maniaDiff === 'hard' ? 90 : maniaDiff === 'normal' ? 120 : 150;
-    prog.style.width = Math.min(100, (elapsed / maxTime) * 100) + '%';
-    // Auto-end after max time
-    if (elapsed >= maxTime) { endMania(); return; }
+    prog.style.width = Math.min(100, (elSec / maxTime) * 100) + '%';
+    if (elSec >= maxTime) { endMania(); return; }
   }
 
   MANIA.raf = requestAnimationFrame(maniaLoop);
 }
 
 // ── Note spawning ─────────────────────────────────────
+// Patterns: single notes + chords, randomly selected
 const maniaPatterns = [
-  [0], [1], [2], [3],
-  [0, 2], [1, 3], [0, 3], [1, 2],
-  [0, 1], [2, 3],
-  [0, 1, 2], [1, 2, 3],
-  [0, 2, 3], [0, 1, 3],
+  [0],[1],[2],[3],                    // singles
+  [0,2],[1,3],[0,3],[1,2],            // 2-key chords
+  [0,1],[2,3],                        // adjacent chords
+  [0,1,2],[1,2,3],[0,2,3],[0,1,3],    // 3-key chords
 ];
-let maniaPatIdx = 0;
-let maniaPatTimer = 0;
+let maniaLastLane = -1;
 
 function spawnManiaNote() {
-  // Pick lane pattern — avoid too many chords at low speeds
-  const cfg = MANIA_DIFFS[maniaDiff];
   let lanes;
+  // Chord chance grows with speed
+  const chordChance = Math.min(0.5, (maniaSpeedMult - 1.0) * 0.28);
 
-  // At low speed, single notes more common
-  const chordChance = Math.min(0.45, (maniaSpeedMult - 1.0) * 0.3);
-  const r = Math.random();
-
-  if (r < chordChance) {
-    // Chord
+  if (Math.random() < chordChance) {
+    // Chord — pick random multi-key pattern
     const chords = maniaPatterns.filter(p => p.length >= 2);
     lanes = chords[Math.floor(Math.random() * chords.length)];
   } else {
-    // Single note — avoid same lane as last
-    lanes = [Math.floor(Math.random() * 4)];
+    // Single note — avoid repeating same lane twice in a row
+    let lane;
+    do { lane = Math.floor(Math.random() * 4); } while (lane === maniaLastLane);
+    maniaLastLane = lane;
+    lanes = [lane];
   }
 
   for (const lane of lanes) {
-    const note = {
-      id: MANIA.noteIdCounter++,
-      lane,
-      spawnTime: performance.now(),
-      y: 0,
-      hit: false,
-      missed: false,
-      el: null,
-    };
-
-    // Create DOM element
     const el = document.createElement('div');
     el.className = 'mania-note k' + lane;
-    el.style.height = '28px';
-    el.style.bottom = '100%'; // starts above field
-    $('mania-lane-' + lane).appendChild(el);
-    note.el = el;
+    el.style.cssText = 'position:absolute;left:3px;right:3px;height:26px;top:-26px;border-radius:5px 5px 3px 3px;';
+    // Color per lane
+    const cols = ['#a8d8ff','#c084fc','#c084fc','#a8d8ff'];
+    el.style.background = cols[lane];
+    el.style.boxShadow = '0 0 10px ' + cols[lane];
+    el.style.border = '1px solid ' + cols[lane];
 
-    MANIA.notes.push(note);
+    const laneEl = $('mania-lane-' + lane);
+    if (!laneEl) continue;
+    laneEl.appendChild(el);
+
+    MANIA.notes.push({
+      id: MANIA.noteIdCounter++,
+      lane, el,
+      spawnTime: performance.now(),
+      y: -26,
+      hit: false,
+      missed: false,
+    });
   }
 }
 
@@ -3410,30 +3387,35 @@ function maniaKeyPress(lane) {
     setTimeout(() => flash.remove(), 150);
   }
 
-  // Find closest note in this lane
+  // Find closest note in this lane to the hit zone
   const field = $('mania-field');
   const fieldH = field ? field.clientHeight : 600;
-  const hitY = fieldH;
+  const NOTE_H = 26;
+  const hitY = fieldH - NOTE_H; // top pos where note is perfectly at hit zone
   const cfg = MANIA_DIFFS[maniaDiff];
+  const speedPx = cfg.baseSpeed * maniaSpeedMult / 1000;
 
   let best = null;
   let bestDist = Infinity;
 
   for (const note of MANIA.notes) {
     if (note.hit || note.missed || note.lane !== lane) continue;
+    // Only consider notes near the hit zone (not too far above)
+    if (note.y < hitY - fieldH * 0.6) continue; // too high up
     const dist = Math.abs(note.y - hitY);
     if (dist < bestDist) { bestDist = dist; best = note; }
   }
 
-  if (!best) return; // No note — no penalty
+  if (!best) return;
 
-  const distMs = bestDist / (cfg.baseSpeed * maniaSpeedMult / 1000);
+  // Convert px distance to ms
+  const distMs = speedPx > 0 ? bestDist / speedPx : 999;
 
   let judgment;
   if (distMs <= MANIA.windows.perfect) judgment = 'perfect';
   else if (distMs <= MANIA.windows.great) judgment = 'great';
   else if (distMs <= MANIA.windows.good) judgment = 'good';
-  else return; // Too early or already missed
+  else return; // too early
 
   hitNote(best, judgment);
 }
