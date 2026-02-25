@@ -294,6 +294,317 @@ html,body{height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(
   #watch-view .wp-chat .msgs{flex:1;}
 }
 
+/* ══════════════════════════════════════════════════════
+   OSU!MANIA — 4K Piano Tiles
+══════════════════════════════════════════════════════ */
+#game-mania {
+  position: fixed; inset: 0; background: #08080c;
+  display: none; z-index: 950;
+  font-family: 'Space Mono', monospace;
+}
+#game-mania.on { display: flex; flex-direction: column; }
+
+/* ── Mania Header ── */
+.mania-hud {
+  display: flex; align-items: center; gap: 16px;
+  padding: 8px 16px; background: rgba(0,0,0,.6);
+  border-bottom: 1px solid rgba(168,216,255,.15);
+  flex-shrink: 0; flex-wrap: wrap;
+}
+.mania-score-big {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 2rem; letter-spacing: 3px; color: #a8d8ff;
+  min-width: 120px;
+}
+.mania-stat { display: flex; flex-direction: column; gap: 1px; }
+.mania-stat-lbl { font-size: .55rem; color: #6b6b80; letter-spacing: 1px; text-transform: uppercase; }
+.mania-stat-val { font-size: .88rem; color: #e8eaf0; font-weight: 700; }
+.mania-rank-badge {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 2.2rem; letter-spacing: 2px;
+  text-shadow: 0 0 20px currentColor;
+  min-width: 36px; text-align: center;
+}
+.mania-combo {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1.6rem; letter-spacing: 2px;
+  color: #ffd166; text-shadow: 0 0 12px #ffd166;
+  min-width: 80px;
+}
+.mania-progress-bar {
+  height: 3px; background: #1a1a22; flex: 1; border-radius: 2px; min-width: 80px;
+}
+.mania-progress-fill {
+  height: 100%; background: linear-gradient(90deg, #a8d8ff, #c084fc);
+  border-radius: 2px; transition: width .2s;
+}
+.mania-hud-btn {
+  background: rgba(255,255,255,.05); border: 1px solid #2a2a35;
+  border-radius: 6px; color: #e8eaf0; cursor: pointer;
+  padding: 5px 10px; font-size: .75rem; font-family: 'Space Mono', monospace;
+}
+.mania-hud-btn:hover { background: rgba(255,255,255,.1); }
+.mania-hud-btn.red { border-color: #ff4466; color: #ff4466; }
+
+/* ── Mania Stage ── */
+.mania-stage-wrap {
+  flex: 1; display: flex; align-items: stretch;
+  justify-content: center; overflow: hidden; position: relative;
+}
+.mania-stage {
+  position: relative; width: 100%; max-width: 480px;
+  display: flex; flex-direction: column;
+}
+.mania-field {
+  flex: 1; position: relative; overflow: hidden;
+  display: flex; gap: 2px; padding: 0 2px;
+}
+
+/* ── Lanes ── */
+.mania-lane {
+  flex: 1; position: relative; overflow: hidden;
+  background: rgba(255,255,255,.012);
+  border-left: 1px solid rgba(255,255,255,.04);
+  border-right: 1px solid rgba(255,255,255,.04);
+}
+.mania-lane.active-flash { background: rgba(168,216,255,.06); }
+
+/* ── Notes ── */
+.mania-note {
+  position: absolute; left: 2px; right: 2px;
+  border-radius: 5px 5px 3px 3px;
+  box-shadow: 0 0 8px currentColor;
+  transition: none;
+}
+.mania-note.k0 { background: linear-gradient(180deg,#a8d8ff,#5ba8cc); color: #a8d8ff; border: 1px solid #a8d8ff; }
+.mania-note.k1 { background: linear-gradient(180deg,#c084fc,#8040c0); color: #c084fc; border: 1px solid #c084fc; }
+.mania-note.k2 { background: linear-gradient(180deg,#c084fc,#8040c0); color: #c084fc; border: 1px solid #c084fc; }
+.mania-note.k3 { background: linear-gradient(180deg,#a8d8ff,#5ba8cc); color: #a8d8ff; border: 1px solid #a8d8ff; }
+
+/* ── Hit Zone ── */
+.mania-hitzone {
+  height: 54px; display: flex; gap: 2px;
+  padding: 4px 2px; flex-shrink: 0;
+  background: rgba(0,0,0,.4);
+  border-top: 2px solid rgba(168,216,255,.15);
+}
+.mania-key {
+  flex: 1; border-radius: 6px;
+  background: rgba(255,255,255,.04);
+  border: 2px solid rgba(255,255,255,.1);
+  display: flex; align-items: center; justify-content: center;
+  font-size: .7rem; color: #6b6b80;
+  cursor: pointer; user-select: none;
+  transition: background .05s, border-color .05s, transform .05s;
+  position: relative; overflow: hidden;
+}
+.mania-key.k0, .mania-key.k3 { border-color: rgba(168,216,255,.3); }
+.mania-key.k1, .mania-key.k2 { border-color: rgba(192,132,252,.3); }
+.mania-key.pressed {
+  background: rgba(168,216,255,.18) !important;
+  border-color: #a8d8ff !important;
+  transform: scaleY(.92);
+}
+.mania-key.k1.pressed, .mania-key.k2.pressed {
+  background: rgba(192,132,252,.18) !important;
+  border-color: #c084fc !important;
+}
+/* Key labels */
+.mania-key-lbl { font-size: .65rem; font-family: 'Space Mono', monospace; color: #6b6b80; }
+
+/* ── Hit FX ── */
+.mania-hit-fx {
+  position: absolute; width: 100%; text-align: center;
+  font-family: 'Bebas Neue', sans-serif; font-size: 1.4rem;
+  letter-spacing: 2px; pointer-events: none;
+  animation: mania-fx-pop .4s forwards;
+  bottom: 60px; left: 0;
+}
+@keyframes mania-fx-pop {
+  0%   { opacity: 1; transform: translateY(0) scale(1.2); }
+  100% { opacity: 0; transform: translateY(-24px) scale(0.8); }
+}
+.mania-hit-fx.perfect { color: #ffd166; text-shadow: 0 0 16px #ffd166; }
+.mania-hit-fx.great   { color: #39ffc0; text-shadow: 0 0 12px #39ffc0; }
+.mania-hit-fx.good    { color: #60a5fa; text-shadow: 0 0 10px #60a5fa; }
+.mania-hit-fx.miss    { color: #ff4466; text-shadow: 0 0 10px #ff4466; }
+
+/* ── Combo burst ── */
+.mania-combo-burst {
+  position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 3.5rem; color: #ffd166;
+  text-shadow: 0 0 30px #ffd166;
+  pointer-events: none;
+  animation: combo-burst .5s forwards;
+  z-index: 10;
+}
+@keyframes combo-burst {
+  0%   { opacity: .9; transform: translate(-50%,-50%) scale(1.4); }
+  100% { opacity: 0; transform: translate(-50%,-60%) scale(.7); }
+}
+
+/* ── Lane flash on hit ── */
+.mania-lane-hit {
+  position: absolute; inset: 0;
+  background: radial-gradient(ellipse at 50% 100%, rgba(168,216,255,.25) 0%, transparent 70%);
+  pointer-events: none;
+  animation: lane-flash .15s forwards;
+}
+.mania-lane-hit.purple {
+  background: radial-gradient(ellipse at 50% 100%, rgba(192,132,252,.25) 0%, transparent 70%);
+}
+@keyframes lane-flash { 0%{opacity:1} 100%{opacity:0} }
+
+/* ── Speed indicator ── */
+.mania-speed {
+  position: absolute; top: 10px; right: 10px;
+  font-size: .65rem; color: rgba(255,255,255,.3);
+  font-family: 'Space Mono', monospace;
+}
+
+/* ── Result Screen ── */
+.mania-result {
+  position: absolute; inset: 0;
+  background: rgba(0,0,0,.85);
+  display: none; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 14px; z-index: 20;
+  backdrop-filter: blur(6px);
+}
+.mania-result.on { display: flex; }
+.mania-result-rank {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 6rem; letter-spacing: 4px;
+  text-shadow: 0 0 40px currentColor;
+  animation: rank-pop .5s cubic-bezier(.2,1.4,.4,1) both;
+}
+@keyframes rank-pop {
+  0% { transform: scale(0) rotate(-10deg); opacity: 0; }
+  100% { transform: scale(1) rotate(0); opacity: 1; }
+}
+.mania-result-stats {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 8px 20px; text-align: center;
+}
+.mania-result-stat { display: flex; flex-direction: column; gap: 2px; }
+.mania-result-stat span:first-child { font-size: .6rem; color: #6b6b80; letter-spacing: 1px; }
+.mania-result-stat span:last-child  { font-size: 1.3rem; font-family: 'Bebas Neue', sans-serif; color: #e8eaf0; letter-spacing: 1px; }
+.mania-result-btns { display: flex; gap: 10px; margin-top: 8px; }
+
+/* ── Leaderboard Panel ── */
+.mania-lb-panel {
+  position: absolute; top: 0; right: -280px; width: 270px; height: 100%;
+  background: rgba(8,8,12,.95); border-left: 1px solid rgba(168,216,255,.1);
+  display: flex; flex-direction: column;
+  transition: right .3s cubic-bezier(.4,0,.2,1);
+  z-index: 15;
+}
+.mania-lb-panel.open { right: 0; }
+.mania-lb-head {
+  padding: 12px 14px; border-bottom: 1px solid rgba(168,216,255,.1);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.mania-lb-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.1rem; letter-spacing: 3px; color: #a8d8ff; }
+.mania-lb-body { flex: 1; overflow-y: auto; padding: 6px 0; }
+.mania-lb-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 12px; border-bottom: 1px solid rgba(255,255,255,.04);
+  transition: background .15s;
+}
+.mania-lb-row:hover { background: rgba(255,255,255,.03); }
+.mania-lb-pos {
+  font-family: 'Bebas Neue', sans-serif; font-size: 1.1rem;
+  min-width: 22px; text-align: center;
+}
+.mania-lb-pos.gold   { color: #ffd166; }
+.mania-lb-pos.silver { color: #c0c0c0; }
+.mania-lb-pos.bronze { color: #cd7f32; }
+.mania-lb-av {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: #1a1a22; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: .65rem; font-weight: 700; overflow: hidden;
+}
+.mania-lb-av img { width: 100%; height: 100%; object-fit: cover; }
+.mania-lb-info { flex: 1; min-width: 0; }
+.mania-lb-name { font-size: .8rem; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mania-lb-sub  { font-size: .62rem; color: #6b6b80; font-family: 'Space Mono', monospace; }
+.mania-lb-score-val { font-family: 'Bebas Neue', sans-serif; font-size: 1rem; letter-spacing: 1px; color: #a8d8ff; }
+.mania-lb-rank-sm {
+  font-family: 'Bebas Neue', sans-serif; font-size: .9rem;
+  min-width: 18px; text-align: center;
+}
+.mania-lb-me { background: rgba(168,216,255,.06) !important; }
+
+/* ── Start screen ── */
+.mania-start {
+  position: absolute; inset: 0;
+  background: rgba(8,8,12,.96);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 16px; z-index: 20;
+}
+.mania-start-title {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 3rem; letter-spacing: 8px;
+  background: linear-gradient(135deg, #a8d8ff, #c084fc);
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent;
+}
+.mania-start-sub {
+  font-size: .78rem; color: #6b6b80; letter-spacing: 2px; font-family: 'Space Mono', monospace;
+}
+.mania-start-keys {
+  display: flex; gap: 10px; margin: 8px 0;
+}
+.mania-start-key {
+  width: 44px; height: 44px; border-radius: 8px;
+  border: 2px solid rgba(168,216,255,.3);
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Bebas Neue', sans-serif; font-size: 1.2rem;
+  color: #a8d8ff;
+}
+.mania-start-key:nth-child(2), .mania-start-key:nth-child(3) { border-color: rgba(192,132,252,.3); color: #c084fc; }
+.mania-btn {
+  background: linear-gradient(135deg, #1a2a3a, #1a1a2a);
+  border: 1px solid rgba(168,216,255,.4);
+  border-radius: 10px; color: #a8d8ff;
+  cursor: pointer; padding: 12px 32px;
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1.1rem; letter-spacing: 4px;
+  transition: all .2s;
+}
+.mania-btn:hover { background: rgba(168,216,255,.1); border-color: #a8d8ff; }
+.mania-btn.prim {
+  background: linear-gradient(135deg, #a8d8ff, #c084fc);
+  color: #08080c; border: none; font-size: 1.3rem;
+}
+.mania-btn.prim:hover { opacity: .9; transform: scale(1.03); }
+.mania-diff-btns { display: flex; gap: 8px; }
+.mania-diff-btn {
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 8px; color: #6b6b80;
+  cursor: pointer; padding: 7px 16px;
+  font-family: 'Space Mono', monospace; font-size: .75rem;
+  transition: all .2s;
+}
+.mania-diff-btn.active { border-color: #a8d8ff; color: #a8d8ff; background: rgba(168,216,255,.08); }
+.mania-diff-btn.hard.active { border-color: #ff4466; color: #ff4466; background: rgba(255,68,102,.08); }
+
+/* ── BG lines (visual) ── */
+.mania-bg-lines {
+  position: absolute; inset: 0; pointer-events: none;
+  background-image: repeating-linear-gradient(
+    180deg,
+    transparent 0px,
+    transparent 30px,
+    rgba(255,255,255,.015) 30px,
+    rgba(255,255,255,.015) 31px
+  );
+}
+
 /* ── MINIJUEGOS ──────────────────────────────────────── */
 .game-overlay{position:fixed;inset:0;background:rgba(0,0,0,.93);display:none;flex-direction:column;align-items:center;justify-content:center;z-index:900;gap:10px;padding:16px;overflow-y:auto;}
 .game-overlay.on{display:flex;}
@@ -2809,6 +3120,600 @@ function onAppResume() {
   }
 }
 
+
+// ════════════════════════════════════════════════════════
+// OSU!MANIA 4K — Piano Tiles
+// Velocidad progresiva, tabla del servidor, efectos
+// ════════════════════════════════════════════════════════
+const MANIA = {
+  // Game state
+  running: false,
+  paused: false,
+  startTime: 0,
+  gameTime: 0,        // ms elapsed
+  totalDuration: 0,   // set on start based on notes
+  raf: null,
+
+  // Score
+  score: 0,
+  combo: 0,
+  maxCombo: 0,
+  perfect: 0,
+  great: 0,
+  good: 0,
+  miss: 0,
+  totalNotes: 0,
+
+  // Speed
+  baseSpeed: 3,       // px per ms (note fall speed)
+  currentSpeed: 3,
+  speedMult: 1.0,
+  lastSpeedUpTime: 0,
+  speedUpInterval: 8000, // ms between speed increases
+
+  // Notes
+  notes: [],          // {id, lane, spawnTime, el, hit, missed, y}
+  noteIdCounter: 0,
+  nextNoteIdx: 0,     // index in generated sequence
+
+  // Difficulty
+  difficulty: 'normal',
+
+  // Timing windows (ms)
+  windows: { perfect: 45, great: 90, good: 150, miss: 220 },
+
+  // Field dimensions
+  fieldH: 0,
+  hitZoneY: 0,        // Y center of hit zone from top of field
+
+  // Input
+  keysDown: [false, false, false, false],
+};
+
+const MANIA_KEYS = ['d', 'f', 'j', 'k'];
+const MANIA_KEY_CODES = ['KeyD', 'KeyF', 'KeyJ', 'KeyK'];
+const RANK_COLORS = { SS:'#ffd166', S:'#ffd166', A:'#39ffc0', B:'#60a5fa', C:'#c084fc', D:'#ff4466' };
+
+// Difficulty configs
+const MANIA_DIFFS = {
+  easy:   { spawnRate: 900, baseSpeed: 280, initMult: 1.0, accel: 0.04 },
+  normal: { spawnRate: 600, baseSpeed: 340, initMult: 1.0, accel: 0.06 },
+  hard:   { spawnRate: 380, baseSpeed: 420, initMult: 1.0, accel: 0.10 },
+};
+
+let maniaDiff = 'normal';
+let maniaLBOpen = false;
+let maniaGenSeed = 0;
+let maniaSpawnTimer = 0;
+let maniaLastTime = 0;
+let maniaSpeedMult = 1.0;
+let maniaSpeedTimer = 0;
+
+function setManiaDiff(d) {
+  maniaDiff = d;
+  ['easy','normal','hard'].forEach(k => {
+    const b = $('diff-' + k);
+    if (b) {
+      b.className = 'mania-diff-btn' + (k === 'hard' ? ' hard' : '') + (k === d ? ' active' : '');
+    }
+  });
+}
+
+function initMania() {
+  $('game-mania').classList.add('on');
+  $('mania-start').style.display = 'flex';
+  $('mania-result').classList.remove('on');
+  // Load leaderboard
+  if (currentServer) socket.emit('mania-get-lb', { serverId: String(currentServer._id) });
+}
+
+function closeMania() {
+  stopMania();
+  $('game-mania').classList.remove('on');
+}
+
+function confirmQuitMania() {
+  if (MANIA.running) {
+    if (confirm('¿Salir? Se perderá el progreso actual.')) stopMania();
+  } else {
+    closeMania();
+  }
+}
+
+function startMania() {
+  $('mania-start').style.display = 'none';
+  $('mania-result').classList.remove('on');
+  resetManiaState();
+
+  const cfg = MANIA_DIFFS[maniaDiff];
+  maniaSpawnTimer = 0;
+  maniaSpeedTimer = 0;
+  maniaSpeedMult = cfg.initMult;
+  maniaLastTime = performance.now();
+  MANIA.running = true;
+  MANIA.startTime = performance.now();
+
+  updateManiaHUD();
+  MANIA.raf = requestAnimationFrame(maniaLoop);
+  beep(880, .08, .1); beep(1100, .08, .1);
+}
+
+function restartMania() {
+  $('mania-result').classList.remove('on');
+  $('mania-start').style.display = 'none';
+  startMania();
+}
+
+function stopMania() {
+  MANIA.running = false;
+  if (MANIA.raf) { cancelAnimationFrame(MANIA.raf); MANIA.raf = null; }
+  // Clear all note elements
+  for (let i = 0; i < 4; i++) {
+    const lane = $('mania-lane-' + i);
+    if (lane) lane.innerHTML = '';
+  }
+  MANIA.notes = [];
+}
+
+function resetManiaState() {
+  MANIA.score = 0; MANIA.combo = 0; MANIA.maxCombo = 0;
+  MANIA.perfect = 0; MANIA.great = 0; MANIA.good = 0; MANIA.miss = 0;
+  MANIA.notes = []; MANIA.noteIdCounter = 0;
+  MANIA.keysDown = [false, false, false, false];
+  for (let i = 0; i < 4; i++) {
+    const lane = $('mania-lane-' + i);
+    if (lane) lane.innerHTML = '';
+  }
+}
+
+// ── Main game loop ────────────────────────────────────
+function maniaLoop(ts) {
+  if (!MANIA.running) return;
+
+  const dt = Math.min(ts - maniaLastTime, 50); // cap dt at 50ms to avoid spiral
+  maniaLastTime = ts;
+  MANIA.gameTime = ts - MANIA.startTime;
+
+  // Speed progression — increases every few seconds
+  maniaSpeedTimer += dt;
+  const cfg = MANIA_DIFFS[maniaDiff];
+  const targetMult = 1.0 + (MANIA.gameTime / 1000) * cfg.accel;
+  maniaSpeedMult = Math.min(targetMult, maniaDiff === 'hard' ? 4.5 : maniaDiff === 'normal' ? 3.5 : 2.5);
+  const speedPx = cfg.baseSpeed * maniaSpeedMult / 1000; // px per ms
+
+  const label = $('mania-speed-label');
+  if (label) label.textContent = maniaSpeedMult.toFixed(1) + 'x';
+
+  // Spawn notes
+  maniaSpawnTimer += dt;
+  const spawnInterval = cfg.spawnRate / Math.min(maniaSpeedMult, 2.0);
+  if (maniaSpawnTimer >= spawnInterval) {
+    maniaSpawnTimer = 0;
+    spawnManiaNote();
+  }
+
+  // Measure field
+  const field = $('mania-field');
+  if (!field) { MANIA.raf = requestAnimationFrame(maniaLoop); return; }
+  const fieldH = field.clientHeight;
+  const hitZoneH = 54; // matches CSS
+  const hitCenterY = fieldH + hitZoneH / 2; // center of hitzone relative to field top
+  const hitY = fieldH; // y where note should be hit (bottom of field)
+
+  // Update notes
+  const now = ts;
+  const toRemove = [];
+
+  for (const note of MANIA.notes) {
+    if (note.hit || note.missed) continue;
+
+    // Y position: how far note has fallen
+    const elapsed = now - note.spawnTime;
+    const travelTotal = fieldH + 40; // total distance (field height + note height)
+    note.y = elapsed * speedPx;
+
+    if (note.el) {
+      // Position from bottom of field (hit zone)
+      const fromBottom = hitY - note.y;
+      note.el.style.bottom = fromBottom + 'px';
+    }
+
+    // Auto-miss: note has passed the hit zone by more than miss window
+    const distPastHit = note.y - hitY;
+    if (distPastHit > cfg.baseSpeed * MANIA_DIFFS[maniaDiff].windows.miss / 1000 * maniaSpeedMult + 30) {
+      registerMiss(note);
+      toRemove.push(note);
+    }
+  }
+
+  for (const n of toRemove) removeNote(n);
+
+  // Progress bar
+  const prog = $('mania-progress');
+  if (prog) {
+    const elapsed = MANIA.gameTime / 1000;
+    const maxTime = maniaDiff === 'hard' ? 90 : maniaDiff === 'normal' ? 120 : 150;
+    prog.style.width = Math.min(100, (elapsed / maxTime) * 100) + '%';
+    // Auto-end after max time
+    if (elapsed >= maxTime) { endMania(); return; }
+  }
+
+  MANIA.raf = requestAnimationFrame(maniaLoop);
+}
+
+// ── Note spawning ─────────────────────────────────────
+const maniaPatterns = [
+  [0], [1], [2], [3],
+  [0, 2], [1, 3], [0, 3], [1, 2],
+  [0, 1], [2, 3],
+  [0, 1, 2], [1, 2, 3],
+  [0, 2, 3], [0, 1, 3],
+];
+let maniaPatIdx = 0;
+let maniaPatTimer = 0;
+
+function spawnManiaNote() {
+  // Pick lane pattern — avoid too many chords at low speeds
+  const cfg = MANIA_DIFFS[maniaDiff];
+  let lanes;
+
+  // At low speed, single notes more common
+  const chordChance = Math.min(0.45, (maniaSpeedMult - 1.0) * 0.3);
+  const r = Math.random();
+
+  if (r < chordChance) {
+    // Chord
+    const chords = maniaPatterns.filter(p => p.length >= 2);
+    lanes = chords[Math.floor(Math.random() * chords.length)];
+  } else {
+    // Single note — avoid same lane as last
+    lanes = [Math.floor(Math.random() * 4)];
+  }
+
+  for (const lane of lanes) {
+    const note = {
+      id: MANIA.noteIdCounter++,
+      lane,
+      spawnTime: performance.now(),
+      y: 0,
+      hit: false,
+      missed: false,
+      el: null,
+    };
+
+    // Create DOM element
+    const el = document.createElement('div');
+    el.className = 'mania-note k' + lane;
+    el.style.height = '28px';
+    el.style.bottom = '100%'; // starts above field
+    $('mania-lane-' + lane).appendChild(el);
+    note.el = el;
+
+    MANIA.notes.push(note);
+  }
+}
+
+// ── Input handling ────────────────────────────────────
+function maniaKeyPress(lane) {
+  if (!MANIA.running) return;
+  MANIA.keysDown[lane] = true;
+
+  const key = $('mania-key-' + lane);
+  if (key) key.classList.add('pressed');
+
+  // Lane flash
+  const laneEl = $('mania-lane-' + lane);
+  if (laneEl) {
+    const flash = document.createElement('div');
+    flash.className = 'mania-lane-hit' + (lane === 1 || lane === 2 ? ' purple' : '');
+    laneEl.appendChild(flash);
+    setTimeout(() => flash.remove(), 150);
+  }
+
+  // Find closest note in this lane
+  const field = $('mania-field');
+  const fieldH = field ? field.clientHeight : 600;
+  const hitY = fieldH;
+  const cfg = MANIA_DIFFS[maniaDiff];
+
+  let best = null;
+  let bestDist = Infinity;
+
+  for (const note of MANIA.notes) {
+    if (note.hit || note.missed || note.lane !== lane) continue;
+    const dist = Math.abs(note.y - hitY);
+    if (dist < bestDist) { bestDist = dist; best = note; }
+  }
+
+  if (!best) return; // No note — no penalty
+
+  const distMs = bestDist / (cfg.baseSpeed * maniaSpeedMult / 1000);
+
+  let judgment;
+  if (distMs <= MANIA.windows.perfect) judgment = 'perfect';
+  else if (distMs <= MANIA.windows.great) judgment = 'great';
+  else if (distMs <= MANIA.windows.good) judgment = 'good';
+  else return; // Too early or already missed
+
+  hitNote(best, judgment);
+}
+
+function maniaKeyRelease(lane) {
+  MANIA.keysDown[lane] = false;
+  const key = $('mania-key-' + lane);
+  if (key) key.classList.remove('pressed');
+}
+
+function hitNote(note, judgment) {
+  note.hit = true;
+  if (note.el) note.el.style.display = 'none';
+
+  MANIA.combo++;
+  if (MANIA.combo > MANIA.maxCombo) MANIA.maxCombo = MANIA.combo;
+
+  const scoreMap = { perfect: 300, great: 200, good: 100 };
+  const comboBonus = Math.floor(MANIA.combo / 10) * 50;
+  MANIA.score += (scoreMap[judgment] || 100) * maniaSpeedMult + comboBonus;
+  MANIA[judgment]++;
+
+  // Hit FX
+  showHitFX(note.lane, judgment);
+  if (MANIA.combo > 0 && MANIA.combo % 50 === 0) showComboBurst(MANIA.combo);
+
+  // Sound
+  const freqs = { perfect: 1320, great: 1100, good: 880 };
+  beep(freqs[judgment] || 880, .06, .12);
+
+  updateManiaHUD();
+}
+
+function registerMiss(note) {
+  note.missed = true;
+  if (note.el) note.el.style.display = 'none';
+  MANIA.miss++;
+  MANIA.combo = 0;
+  showHitFX(note.lane, 'miss');
+  beep(200, .1, .08, 'sawtooth');
+  updateManiaHUD();
+}
+
+function removeNote(note) {
+  const idx = MANIA.notes.indexOf(note);
+  if (idx >= 0) MANIA.notes.splice(idx, 1);
+  if (note.el) note.el.remove();
+}
+
+// ── HUD updates ───────────────────────────────────────
+function updateManiaHUD() {
+  const s = $('mania-score-display');
+  if (s) s.textContent = Math.floor(MANIA.score).toLocaleString();
+
+  const c = $('mania-combo-display');
+  if (c) c.textContent = MANIA.combo + 'x';
+
+  const total = MANIA.perfect + MANIA.great + MANIA.good + MANIA.miss;
+  const acc = total > 0
+    ? ((MANIA.perfect * 300 + MANIA.great * 200 + MANIA.good * 100) / (total * 300) * 100).toFixed(2)
+    : '100.00';
+
+  const a = $('mania-acc-display');
+  if (a) a.textContent = acc + '%';
+
+  const rank = calcManiaRank(parseFloat(acc));
+  const r = $('mania-rank-display');
+  if (r) { r.textContent = rank; r.style.color = RANK_COLORS[rank] || '#fff'; }
+
+  const p = $('mania-perf-display');
+  if (p) p.textContent = MANIA.perfect;
+
+  const m = $('mania-miss-display');
+  if (m) m.textContent = MANIA.miss;
+}
+
+function calcManiaRank(acc) {
+  if (acc >= 99.5) return 'SS';
+  if (acc >= 95) return 'S';
+  if (acc >= 90) return 'A';
+  if (acc >= 80) return 'B';
+  if (acc >= 70) return 'C';
+  return 'D';
+}
+
+// ── Hit FX ────────────────────────────────────────────
+function showHitFX(lane, judgment) {
+  const laneEl = $('mania-lane-' + lane);
+  if (!laneEl) return;
+  const fx = document.createElement('div');
+  const labels = { perfect: 'PERFECT!', great: 'GREAT', good: 'GOOD', miss: 'MISS' };
+  fx.className = 'mania-hit-fx ' + judgment;
+  fx.textContent = labels[judgment] || judgment.toUpperCase();
+  laneEl.appendChild(fx);
+  setTimeout(() => fx.remove(), 420);
+}
+
+function showComboBurst(combo) {
+  const field = $('mania-field');
+  if (!field) return;
+  const burst = document.createElement('div');
+  burst.className = 'mania-combo-burst';
+  burst.textContent = combo + 'x';
+  field.appendChild(burst);
+  setTimeout(() => burst.remove(), 520);
+}
+
+// ── End game ──────────────────────────────────────────
+function endMania() {
+  MANIA.running = false;
+  if (MANIA.raf) { cancelAnimationFrame(MANIA.raf); MANIA.raf = null; }
+
+  const total = MANIA.perfect + MANIA.great + MANIA.good + MANIA.miss;
+  const accNum = total > 0
+    ? (MANIA.perfect * 300 + MANIA.great * 200 + MANIA.good * 100) / (total * 300) * 100
+    : 100;
+  const acc = accNum.toFixed(2);
+  const rank = calcManiaRank(parseFloat(acc));
+  const finalScore = Math.floor(MANIA.score);
+
+  // Show result screen
+  const res = $('mania-result');
+  if (res) res.classList.add('on');
+  const rrank = $('mania-res-rank');
+  if (rrank) { rrank.textContent = rank; rrank.style.color = RANK_COLORS[rank] || '#fff'; }
+
+  const stats = $('mania-res-stats');
+  if (stats) {
+    stats.innerHTML = `
+      <div class="mania-result-stat"><span>SCORE</span><span style="color:#a8d8ff;">${finalScore.toLocaleString()}</span></div>
+      <div class="mania-result-stat"><span>ACCURACY</span><span style="color:#39ffc0;">${acc}%</span></div>
+      <div class="mania-result-stat"><span>MAX COMBO</span><span style="color:#ffd166;">${MANIA.maxCombo}x</span></div>
+      <div class="mania-result-stat"><span>PERFECT</span><span style="color:#ffd166;">${MANIA.perfect}</span></div>
+      <div class="mania-result-stat"><span>GREAT</span><span style="color:#39ffc0;">${MANIA.great}</span></div>
+      <div class="mania-result-stat"><span>GOOD</span><span style="color:#60a5fa;">${MANIA.good}</span></div>
+      <div class="mania-result-stat"><span>MISS</span><span style="color:#ff4466;">${MANIA.miss}</span></div>
+      <div class="mania-result-stat"><span>SPEED MAX</span><span>${maniaSpeedMult.toFixed(1)}x</span></div>
+    `;
+  }
+
+  // Submit score to server
+  if (currentServer) {
+    socket.emit('mania-score', {
+      serverId: String(currentServer._id),
+      score: finalScore,
+      accuracy: parseFloat(acc),
+      maxCombo: MANIA.maxCombo,
+      rank,
+    });
+    socket.emit('send-message', {
+      channelId: chIdStr(),
+      content: `🎹 **${myUser?.username}** terminó osu!mania — Score: **${finalScore.toLocaleString()}** · Acc: **${acc}%** · Rank: **${rank}** · ${maniaDiff.toUpperCase()}`,
+      attachments: [],
+    });
+  }
+
+  // Sound fanfare
+  [880, 1100, 1320, 1760].forEach((f, i) => setTimeout(() => beep(f, .12, .18), i * 80));
+}
+
+// ── Leaderboard ───────────────────────────────────────
+function toggleManiaLB() {
+  const panel = $('mania-lb-panel');
+  if (!panel) return;
+  maniaLBOpen = !maniaLBOpen;
+  panel.classList.toggle('open', maniaLBOpen);
+  if (maniaLBOpen && currentServer) {
+    socket.emit('mania-get-lb', { serverId: String(currentServer._id) });
+  }
+}
+
+socket.on('mania-leaderboard', ({ serverId, scores }) => {
+  if (!currentServer || String(serverId) !== String(currentServer._id)) return;
+  renderManiaLB(scores);
+});
+
+function renderManiaLB(scores) {
+  const body = $('mania-lb-body');
+  if (!body) return;
+
+  if (!scores || !scores.length) {
+    body.innerHTML = '<div style="padding:20px;text-align:center;font-size:.75rem;color:#6b6b80;">Nadie ha jugado aún.<br/>¡Sé el primero!</div>';
+    return;
+  }
+
+  const AV_COLORS = ['#3a6080','#2d4a22','#4a1f2d','#1f3a4a','#3a2d1f','#2d1f4a'];
+  const avCol = n => AV_COLORS[n ? n.charCodeAt(0) % AV_COLORS.length : 0];
+  const ini = n => n ? n.slice(0,2).toUpperCase() : '??';
+  const posColors = ['gold', 'silver', 'bronze'];
+
+  body.innerHTML = scores.map((s, i) => {
+    const isMe = myUser && s.username === myUser.username;
+    const posClass = posColors[i] || '';
+    const avHtml = s.avatar
+      ? `<div class="mania-lb-av"><img src="${esc(s.avatar)}" alt=""/></div>`
+      : `<div class="mania-lb-av" style="background:${avCol(s.username)}">${ini(s.username)}</div>`;
+    const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i+1}`;
+    const rankColor = RANK_COLORS[s.rank] || '#fff';
+
+    return `<div class="mania-lb-row${isMe ? ' mania-lb-me' : ''}">
+      <div class="mania-lb-pos ${posClass}">${medal}</div>
+      ${avHtml}
+      <div class="mania-lb-info">
+        <div class="mania-lb-name">${esc(s.username)}${isMe ? ' <span style="color:#a8d8ff;font-size:.6rem;">TÚ</span>' : ''}</div>
+        <div class="mania-lb-sub">${s.accuracy.toFixed(1)}% · ${s.maxCombo}x combo</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;">
+        <div class="mania-lb-score-val">${Math.floor(s.score).toLocaleString()}</div>
+        <div class="mania-lb-rank-sm" style="color:${rankColor}">${s.rank}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── Keyboard events ───────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (!$('game-mania')?.classList.contains('on')) return;
+  // Don't capture when typing in inputs
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+  const idx = MANIA_KEY_CODES.indexOf(e.code);
+  if (idx >= 0 && !e.repeat) { e.preventDefault(); maniaKeyPress(idx); }
+  if (e.code === 'Escape') confirmQuitMania();
+});
+
+document.addEventListener('keyup', e => {
+  if (!$('game-mania')?.classList.contains('on')) return;
+  const idx = MANIA_KEY_CODES.indexOf(e.code);
+  if (idx >= 0) maniaKeyRelease(idx);
+});
+
+// ── Touch support (mobile) ────────────────────────────
+(function setupManiaTouch() {
+  const activeTouches = {};
+
+  function getTouchLane(x, fieldEl) {
+    if (!fieldEl) return -1;
+    const r = fieldEl.getBoundingClientRect();
+    const relX = x - r.left;
+    const laneW = r.width / 4;
+    return Math.floor(relX / laneW);
+  }
+
+  document.addEventListener('touchstart', e => {
+    if (!$('game-mania')?.classList.contains('on') || !MANIA.running) return;
+    const hitzone = $('mania-hitzone');
+    const field = $('mania-field');
+    const stageEl = document.querySelector('.mania-stage');
+    if (!stageEl) return;
+
+    for (const t of e.changedTouches) {
+      const el = document.elementFromPoint(t.clientX, t.clientY);
+      if (!stageEl.contains(el)) continue;
+      const lane = getTouchLane(t.clientX, field);
+      if (lane >= 0 && lane < 4) {
+        activeTouches[t.identifier] = lane;
+        maniaKeyPress(lane);
+      }
+    }
+    e.preventDefault();
+  }, { passive: false });
+
+  document.addEventListener('touchend', e => {
+    if (!$('game-mania')?.classList.contains('on')) return;
+    for (const t of e.changedTouches) {
+      const lane = activeTouches[t.identifier];
+      if (lane !== undefined) { maniaKeyRelease(lane); delete activeTouches[t.identifier]; }
+    }
+  }, { passive: false });
+})();
+
+// Key button HTML click handlers
+[0,1,2,3].forEach(i => {
+  const k = $('mania-key-' + i);
+  if (!k) return;
+  k.addEventListener('mousedown', () => maniaKeyPress(i));
+  k.addEventListener('mouseup', () => maniaKeyRelease(i));
+  k.addEventListener('mouseleave', () => maniaKeyRelease(i));
+});
+
 </script>
 <script src="https://www.youtube.com/iframe_api"></script>
 
@@ -2861,6 +3766,9 @@ function onAppResume() {
       </button>
       <button class="game-btn" onclick="closeModal('games-modal');initTypeRace();" style="display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:12px;">
         <span style="font-size:1.3rem;">⌨️</span><span style="font-weight:700;">Type Race</span><span style="font-size:.65rem;color:var(--muted);">vs. todos</span>
+      </button>
+      <button class="game-btn" onclick="closeModal('games-modal');initMania();" style="display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:12px;grid-column:1/-1;border-color:rgba(168,216,255,.3);">
+        <span style="font-size:1.3rem;">🎹</span><span style="font-weight:700;color:#a8d8ff;">osu!mania 4K</span><span style="font-size:.65rem;color:var(--muted);">Piano Tiles · Tabla global del servidor</span>
       </button>
     </div>
   </div>
@@ -2928,5 +3836,121 @@ function onAppResume() {
     <button class="game-btn" onclick="closeGameOverlay('game-typerace')">✕ Salir</button>
   </div>
 </div>
+
+<!-- ════════════════════════════════════════════════════
+     OSU!MANIA 4K — Piano Tiles
+════════════════════════════════════════════════════ -->
+<div id="game-mania">
+
+  <!-- HUD -->
+  <div class="mania-hud" id="mania-hud">
+    <div class="mania-score-big" id="mania-score-display">0</div>
+    <div class="mania-rank-badge" id="mania-rank-display" style="color:#6b6b80;">D</div>
+    <div class="mania-combo" id="mania-combo-display">0x</div>
+    <div class="mania-stat">
+      <span class="mania-stat-lbl">Accuracy</span>
+      <span class="mania-stat-val" id="mania-acc-display">100.00%</span>
+    </div>
+    <div class="mania-stat">
+      <span class="mania-stat-lbl">Perfect</span>
+      <span class="mania-stat-val" style="color:#ffd166;" id="mania-perf-display">0</span>
+    </div>
+    <div class="mania-stat">
+      <span class="mania-stat-lbl">Miss</span>
+      <span class="mania-stat-val" style="color:#ff4466;" id="mania-miss-display">0</span>
+    </div>
+    <div class="mania-progress-bar">
+      <div class="mania-progress-fill" id="mania-progress" style="width:0%"></div>
+    </div>
+    <button class="mania-hud-btn" onclick="toggleManiaLB()" id="mania-lb-btn">🏆 Tabla</button>
+    <button class="mania-hud-btn red" onclick="confirmQuitMania()">✕</button>
+  </div>
+
+  <!-- Stage -->
+  <div class="mania-stage-wrap">
+    <div class="mania-stage">
+
+      <!-- BG lines -->
+      <div class="mania-bg-lines"></div>
+      <div class="mania-speed" id="mania-speed-label">1.0x</div>
+
+      <!-- Note field -->
+      <div class="mania-field" id="mania-field">
+        <div class="mania-lane" id="mania-lane-0"></div>
+        <div class="mania-lane" id="mania-lane-1"></div>
+        <div class="mania-lane" id="mania-lane-2"></div>
+        <div class="mania-lane" id="mania-lane-3"></div>
+      </div>
+
+      <!-- Hit zone with keys -->
+      <div class="mania-hitzone" id="mania-hitzone">
+        <div class="mania-key k0" id="mania-key-0" data-key="0">
+          <span class="mania-key-lbl">D</span>
+        </div>
+        <div class="mania-key k1" id="mania-key-1" data-key="1">
+          <span class="mania-key-lbl">F</span>
+        </div>
+        <div class="mania-key k2" id="mania-key-2" data-key="2">
+          <span class="mania-key-lbl">J</span>
+        </div>
+        <div class="mania-key k3" id="mania-key-3" data-key="3">
+          <span class="mania-key-lbl">K</span>
+        </div>
+      </div>
+
+      <!-- Result overlay -->
+      <div class="mania-result" id="mania-result">
+        <div class="mania-result-rank" id="mania-res-rank">S</div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:4px;color:#6b6b80;">RESULTADO FINAL</div>
+        <div class="mania-result-stats" id="mania-res-stats"></div>
+        <div class="mania-result-btns">
+          <button class="mania-btn prim" onclick="restartMania()">▶ OTRA VEZ</button>
+          <button class="mania-btn" onclick="closeMania()">✕ SALIR</button>
+          <button class="mania-btn" onclick="toggleManiaLB()">🏆 TABLA</button>
+        </div>
+      </div>
+
+      <!-- Start screen -->
+      <div class="mania-start" id="mania-start">
+        <div class="mania-start-title">OSU!MANIA</div>
+        <div class="mania-start-sub">4 KEYS · PIANO TILES · SERVIDOR GLOBAL</div>
+        <div class="mania-start-keys">
+          <div class="mania-start-key">D</div>
+          <div class="mania-start-key">F</div>
+          <div class="mania-start-key">J</div>
+          <div class="mania-start-key">K</div>
+        </div>
+        <div style="font-size:.72rem;color:#6b6b80;text-align:center;max-width:280px;line-height:1.6;">
+          Las notas caen desde arriba. Presiona la tecla correspondiente cuando lleguen a la zona de hit. La velocidad aumenta con el tiempo.
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;align-items:center;">
+          <div style="font-size:.65rem;color:#6b6b80;letter-spacing:1px;">DIFICULTAD</div>
+          <div class="mania-diff-btns">
+            <button class="mania-diff-btn active" id="diff-easy" onclick="setManiaDiff('easy')">FÁCIL</button>
+            <button class="mania-diff-btn" id="diff-normal" onclick="setManiaDiff('normal')">NORMAL</button>
+            <button class="mania-diff-btn hard" id="diff-hard" onclick="setManiaDiff('hard')">DIFÍCIL</button>
+          </div>
+        </div>
+        <button class="mania-btn prim" id="mania-start-btn" onclick="startMania()">JUGAR</button>
+        <button class="mania-btn" onclick="toggleManiaLB();$('mania-lb-panel').classList.add('open')">🏆 Ver tabla del servidor</button>
+        <button class="mania-btn" onclick="closeMania()" style="color:#6b6b80;border-color:rgba(255,255,255,.08);">✕ Volver</button>
+      </div>
+
+    </div>
+
+    <!-- Leaderboard panel (slides in from right) -->
+    <div class="mania-lb-panel" id="mania-lb-panel">
+      <div class="mania-lb-head">
+        <span class="mania-lb-title">🏆 TABLA</span>
+        <button class="mania-hud-btn" onclick="toggleManiaLB()">✕</button>
+      </div>
+      <div class="mania-lb-body" id="mania-lb-body">
+        <div style="padding:20px;text-align:center;font-size:.75rem;color:#6b6b80;">Cargando...</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
 </body>
 </html>

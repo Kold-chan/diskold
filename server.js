@@ -87,6 +87,14 @@ const focusSessions = new Map();
 // channelId → socketId of host
 const partydoHosts = {};
 
+// ── osu!mania Leaderboard ─────────────────────────────────
+// serverId → { scores: [{ userId, username, score, accuracy, maxCombo, rank, ts }] }
+const maniaLeaderboards = new Map();
+function getManiaLB(serverId) {
+  if (!maniaLeaderboards.has(serverId)) maniaLeaderboards.set(serverId, { scores: [] });
+  return maniaLeaderboards.get(serverId);
+}
+
 // ── MongoDB ───────────────────────────────────────────────
 mongoose.connect(MONGODB_URI)
   .then(() => console.log('✅ MongoDB OK'))
@@ -804,6 +812,40 @@ io.on('connection', socket => {
     // ── VOICE PING (keepalive) ────────────────────────────
   socket.on('voice-ping', ({channelId}) => {
     // Just a keepalive — socket is alive, no-op
+  });
+
+  // ── osu!mania handlers ─────────────────────────────────
+  socket.on('mania-score', ({ serverId, score, accuracy, maxCombo, rank }) => {
+    if (!me || !serverId) return;
+    const lb = getManiaLB(String(serverId));
+    // Remove previous score for this user
+    lb.scores = lb.scores.filter(s => String(s.userId) !== String(me._id));
+    // Add new score
+    lb.scores.push({
+      userId: String(me._id),
+      username: me.username,
+      avatar: me.avatar || null,
+      score: Number(score) || 0,
+      accuracy: Number(accuracy) || 0,
+      maxCombo: Number(maxCombo) || 0,
+      rank: rank || 'D',
+      ts: Date.now(),
+    });
+    // Sort by score desc
+    lb.scores.sort((a, b) => b.score - a.score);
+    // Keep top 50
+    if (lb.scores.length > 50) lb.scores = lb.scores.slice(0, 50);
+    // Broadcast updated leaderboard to everyone in this server
+    io.to('srv:' + serverId).emit('mania-leaderboard', {
+      serverId,
+      scores: lb.scores,
+    });
+  });
+
+  socket.on('mania-get-lb', ({ serverId }) => {
+    if (!serverId) return;
+    const lb = getManiaLB(String(serverId));
+    socket.emit('mania-leaderboard', { serverId, scores: lb.scores });
   });
 
   // ── DISCONNECT ─────────────────────────────────────────
